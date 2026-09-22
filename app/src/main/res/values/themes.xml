@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.AntiMaling" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="colorPrimary">@color/accent</item>
+    </style>
+</resources>

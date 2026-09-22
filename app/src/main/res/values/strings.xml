@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">AntiMaling</string>
+    <string name="admin_label">AntiMaling Device Admin</string>
+    <string name="admin_desc">Aktifkan agar HP bisa dikunci jarak jauh, anti-hapus, dan proteksi permanen.</string>
+    <string name="default_lock_text">HP HILANG! Hubungi pemilik. Perangkat terkunci &amp; terlacak.</string>
+</resources>
