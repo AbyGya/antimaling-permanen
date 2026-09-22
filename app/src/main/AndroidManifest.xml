@@ -32,6 +32,8 @@
     <uses-permission android:name="android.permission.FLASHLIGHT" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.hardware.camera.flash" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
@@ -73,6 +75,13 @@
             android:launchMode="singleInstance"
             android:showWhenLocked="true"
             android:turnScreenOn="true" />
+
+        <!-- Izin screen-capture transparan -->
+        <activity
+            android:name=".ui.ShotConsentActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@style/Theme.Trans" />
 
         <!-- Device Admin -->
         <receiver
@@ -131,7 +140,7 @@
             android:name=".service.GuardService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="location|specialUse">
+            android:foregroundServiceType="location|specialUse|mediaProjection|camera">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Anti-maling: kunci, lacak, alarm darurat agar tetap aktif" />

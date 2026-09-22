@@ -18,6 +18,7 @@ import com.antimaling.permanen.control.FlashManager
 import com.antimaling.permanen.control.LocateManager
 import com.antimaling.permanen.control.RingManager
 import com.antimaling.permanen.lock.LockActivity
+import com.antimaling.permanen.net.CloudPoller
 import com.antimaling.permanen.ui.MainActivity
 import com.antimaling.permanen.util.Prefs
 import java.util.concurrent.TimeUnit
@@ -29,6 +30,7 @@ class GuardService : Service() {
     override fun onCreate() {
         super.onCreate()
         try { startForeground(101, notif()) } catch (_: Exception) {}
+        try { CloudPoller.start(this) } catch (_: Exception) {}
         try {
             val req = PeriodicWorkRequestBuilder<KeepAliveWorker>(15, TimeUnit.MINUTES).build()
             WorkManager.getInstance(this).enqueueUniquePeriodicWork("keep", ExistingPeriodicWorkPolicy.KEEP, req)

@@ -22,6 +22,7 @@ import com.antimaling.permanen.control.FlashManager
 import com.antimaling.permanen.control.LocateManager
 import com.antimaling.permanen.control.RingManager
 import com.antimaling.permanen.lock.LockActivity
+import com.antimaling.permanen.net.CloudPoller
 import com.antimaling.permanen.receiver.MyAdminReceiver
 import com.antimaling.permanen.service.GuardService
 import com.antimaling.permanen.service.OverlayService
@@ -85,6 +86,36 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnHideIcon)?.setOnClickListener { setIcon(false) }
         findViewById<Button>(R.id.btnShowIcon)?.setOnClickListener { setIcon(true) }
 
+        // ---- Cloud / panel laptop ----
+        val etKey = findViewById<EditText>(R.id.etFbKey)
+        val etProj = findViewById<EditText>(R.id.etFbProject)
+        try {
+            etKey.setText(Prefs.getFbKey(this))
+            etProj.setText(Prefs.getFbProject(this))
+        } catch (_: Exception) {}
+        findViewById<Button>(R.id.btnCloudSave)?.setOnClickListener {
+            try {
+                Prefs.setFbKey(this, etKey.text.toString())
+                Prefs.setFbProject(this, etProj.text.toString())
+                var pair = Prefs.getPair(this)
+                if (pair.isBlank()) {
+                    pair = (100000..999999).random().toString()
+                    Prefs.setPair(this, pair)
+                }
+                try { GuardService.start(this) } catch (_: Exception) {}
+                toast("Cloud tersimpan! Kode: $pair")
+                refresh()
+            } catch (_: Exception) { toast("Gagal simpan") }
+        }
+        findViewById<Button>(R.id.btnShotConsent)?.setOnClickListener { ShotConsentActivity.open(this) }
+        findViewById<Button>(R.id.btnCloudTest)?.setOnClickListener {
+            toast("Menghubungi cloud...")
+            Thread {
+                val msg = try { CloudPoller.tickOnce(this) } catch (e: Exception) { "Error: ${e.message}" }
+                runOnUiThread { toast(msg) }
+            }.apply { isDaemon = true }.start()
+        }
+
         refresh()
     }
 
@@ -103,8 +134,15 @@ class MainActivity : AppCompatActivity() {
                     "• Battery bebas: ${if (batt) "OK ✅" else "BELUM ❌"}\n" +
                     "• SMS: ${if (Perms.sms(this)) "OK ✅" else "BELUM ❌"} | " +
                     "Lokasi: ${if (Perms.location(this)) "OK ✅" else "BELUM ❌"}\n" +
+                    "• Cloud: ${if (Prefs.cloudOn(this)) "ON ✅" else "OFF ❌"} | " +
+                    "Shot: ${if (com.antimaling.permanen.spy.ShotTaker.hasConsent()) "siap ✅" else "butuh izin ❌"}\n" +
                     "• Terkunci: ${if (Prefs.isLocked(this)) "YA 🔒" else "tidak"} | Dering: ${if (Prefs.isRinging(this)) "YA 🔊" else "tidak"}"
             findViewById<TextView>(R.id.tvStatus)?.text = t
+            try {
+                val pair = Prefs.getPair(this)
+                findViewById<TextView>(R.id.tvPair)?.text =
+                    if (pair.isBlank()) "Kode pairing: -" else "Kode pairing: $pair  (ID: ${Prefs.getAndroidId(this)})"
+            } catch (_: Exception) {}
         } catch (_: Exception) {}
     }
 

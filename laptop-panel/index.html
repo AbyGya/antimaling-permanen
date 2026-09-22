@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AntiMaling — Panel Kontrol</title>
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">
+{ "imports": {
+  "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
+  "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
+  "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+} }
+</script>
+</head>
+<body>
+<div class="bg"></div>
+<header>
+  <div class="logo">🛡</div>
+  <div>
+    <h1>AntiMaling <span>Panel Kontrol</span></h1>
+    <p class="sub">Kontrol HP kapan saja — selama HP online</p>
+  </div>
+  <div class="conn"><span id="dot" class="dot off"></span><span id="connText">Belum tersambung</span></div>
+</header>
+
+<main>
+  <section class="card" id="pairCard">
+    <h2>🔗 Pairing</h2>
+    <div class="row">
+      <input id="pairCode" placeholder="Kode pairing 6 digit (dari app HP)" maxlength="6">
+      <button id="btnConnect" class="primary">Sambungkan</button>
+    </div>
+    <p class="hint">Isi <b>firebase-config.js</b> dengan API Key + Project ID Firebase dulu, lalu masukkan kode pairing dari HP.</p>
+  </section>
+
+  <section class="card hidden" id="dash">
+    <h2>📱 Perangkat <span id="devId" class="pill"></span> <span id="online" class="pill off">offline</span></h2>
+    <p class="hint" id="devInfo">Menunggu heartbeat HP…</p>
+
+    <h3>⚡ Perintah cepat</h3>
+    <div class="grid">
+      <button data-cmd="ping">📶 Ping</button>
+      <button data-cmd="info">ℹ️ Info HP</button>
+      <button data-cmd="lock" class="danger">🔒 Kunci</button>
+      <button data-cmd="ring">🔊 Dering MAX</button>
+      <button data-cmd="stop">🔇 Stop Alarm</button>
+      <button data-cmd="locate">📍 Lacak</button>
+      <button data-cmd="shot">📸 Screenshot</button>
+      <button data-cmd="photo" data-arg="front">🤳 Foto Depan</button>
+      <button data-cmd="photo" data-arg="back">📷 Foto Belakang</button>
+      <button data-cmd="flash" data-arg="60">🔦 Senter+Derng</button>
+      <button data-cmd="overlay" data-arg="on">🖼 Overlay ON</button>
+      <button data-cmd="overlay" data-arg="off">🖼 Overlay OFF</button>
+    </div>
+
+    <h3>✏️ Kustom</h3>
+    <div class="row">
+      <input id="customText" placeholder="Teks overlay custom…">
+      <button id="btnText">Kirim Teks</button>
+    </div>
+    <div class="row">
+      <input id="pinInput" placeholder="PIN pemilik" type="password">
+      <button id="btnUnlock">🔓 Buka Kunci</button>
+    </div>
+
+    <h3>📥 Hasil <button id="btnClear" class="mini">bersihkan</button></h3>
+    <div id="feed"><p class="hint">Belum ada hasil. Klik perintah di atas.</p></div>
+  </section>
+</main>
+
+<footer><p>HP polling tiap 10 detik • hasil realtime • hanya untuk perangkat milik sendiri</p></footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>

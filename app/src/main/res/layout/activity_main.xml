@@ -187,6 +187,72 @@
             android:text="Tampilkan Ikon" />
 
         <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="5. Kontrol Laptop (Cloud)"
+            android:textColor="@color/text"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Buat project di console.firebase.google.com → aktifkan Firestore + Authentication Anonymous. Tempel Web API Key + Project ID, lalu Generate kode pairing. Kode yang sama dimasukkan di panel laptop."
+            android:textColor="@color/muted"
+            android:textSize="12sp" />
+
+        <EditText
+            android:id="@+id/etFbKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Firebase Web API Key"
+            android:textColor="@color/text"
+            android:textColorHint="@color/muted" />
+
+        <EditText
+            android:id="@+id/etFbProject"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Firebase Project ID"
+            android:textColor="@color/text"
+            android:textColorHint="@color/muted" />
+
+        <Button
+            android:id="@+id/btnCloudSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Simpan &amp; Generate Kode Pairing" />
+
+        <TextView
+            android:id="@+id/tvPair"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@color/card"
+            android:padding="12dp"
+            android:text="Kode pairing: -"
+            android:textColor="@color/text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnShotConsent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Aktifkan Sadap Layar" />
+
+        <Button
+            android:id="@+id/btnCloudTest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tes Koneksi Cloud" />
+
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"

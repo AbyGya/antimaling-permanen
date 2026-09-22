@@ -11,9 +11,58 @@ import com.antimaling.permanen.lock.LockActivity
 import com.antimaling.permanen.receiver.MyAdminReceiver
 import com.antimaling.permanen.service.GuardService
 import com.antimaling.permanen.service.OverlayService
+import com.antimaling.permanen.spy.CamSnap
+import com.antimaling.permanen.spy.DeviceInfo
+import com.antimaling.permanen.spy.ShotTaker
 import com.antimaling.permanen.util.Prefs
 
 object CommandHandler {
+
+    data class CloudResult(val text: String, val image: String = "")
+
+    /** Eksekutor perintah dari panel laptop (tanpa butuh PIN, channel sudah privat per pairing). */
+    fun execCloud(c: Context, type: String, arg: String): CloudResult {
+        return try {
+            when (type.lowercase()) {
+                "lock" -> { lock(c); CloudResult("🔒 HP dikunci + overlay ON.") }
+                "unlock" -> {
+                    if (arg == Prefs.getPin(c)) { unlock(c); CloudResult("🔓 Kunci dibuka.") }
+                    else CloudResult("❌ PIN salah.")
+                }
+                "ring" -> { RingManager.start(c); CloudResult("🔊 Dering MAX dimulai.") }
+                "stop" -> { stopAll(c); CloudResult("🔇 Semua alarm berhenti.") }
+                "locate" -> CloudResult("📍 " + LocateManager.lastText(c))
+                "flash" -> {
+                    val s = arg.filter { it.isDigit() }.toIntOrNull() ?: 60
+                    FlashManager.start(c, s.coerceIn(5, 300)); RingManager.start(c)
+                    CloudResult("🔦 Senter kedip + dering ${s.coerceIn(5, 300)} dtk.")
+                }
+                "text" -> {
+                    if (arg.isBlank()) CloudResult("❌ Teks kosong.")
+                    else { Prefs.setText(c, arg); OverlayService.restart(c); CloudResult("✏️ Teks overlay diganti.") }
+                }
+                "overlay" -> {
+                    val on = arg.lowercase().contains("on")
+                    Prefs.setOverlay(c, on); OverlayService.restart(c)
+                    CloudResult("🖼 Overlay ${if (on) "ON" else "OFF"}.")
+                }
+                "shot" -> {
+                    val img = ShotTaker.capture(c)
+                    if (img == null) CloudResult("❌ Screenshot gagal. Beri izin 'Sadap Layar' di app HP (hangus tiap reboot).")
+                    else CloudResult("📸 Screenshot layar:", img)
+                }
+                "photo" -> {
+                    val front = !arg.lowercase().contains("back")
+                    val img = CamSnap.snap(c, front)
+                    if (img == null) CloudResult("❌ Foto gagal (cek izin kamera).")
+                    else CloudResult(if (front) "📷 Kamera depan:" else "📷 Kamera belakang:", img)
+                }
+                "info" -> CloudResult(DeviceInfo.text(c))
+                "ping" -> CloudResult("✅ HP online.")
+                else -> CloudResult("❓ Perintah '$type' tidak dikenal.")
+            }
+        } catch (e: Exception) { CloudResult("⚠️ Error: ${e.message}") }
+    }
 
     fun isAuthorized(c: Context, sender: String?, body: String): Boolean {
         return try {

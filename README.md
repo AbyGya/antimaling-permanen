@@ -72,6 +72,12 @@ Lihat juga `tanam-permanen.sh`.
 - Notification channel selalu dibuat sebelum `startForeground` (wajib Android 8+)
 - Foreground type `location|specialUse` + property (wajib Android 14)
 
+## 5. Kontrol dari Laptop (baru ✨)
+Tanpa IP publik — lewat Firebase. HP polling tiap 10 dtk, panel web realtime.
+Fitur remote: kunci/buka (PIN), dering max, lacak, senter, overlay, teks custom,
+**screenshot layar**, **foto kamera depan/belakang**, info HP, status online/offline.
+Lihat `laptop-panel/README.md` + `firestore.rules`. Panel: `cd laptop-panel && python3 server.py`.
+
 ## Struktur
 ```
 app/src/main/java/com/antimaling/permanen/
