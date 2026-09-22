@@ -5,6 +5,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.graphics.Typeface
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
@@ -25,10 +26,12 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        running = true
         try { startForeground(102, notif()) } catch (_: Exception) {}
     }
 
     override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
+        running = true
         try { startForeground(102, notif()) } catch (_: Exception) {}
         when (i?.action) {
             "OFF" -> { hide(); stopSelf(); return START_NOT_STICKY }
@@ -45,8 +48,9 @@ class OverlayService : Service() {
             val tv = TextView(this).apply {
                 setText("🔒 $text")
                 setTextColor(0xFFFFFFFF.toInt())
-                textSize = 14f
-                setPadding(24, 24, 24, 24)
+                textSize = 16f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(28, 36, 28, 36)
                 setBackgroundColor(0xE6B71C1C.toInt())
             }
             val type = if (Build.VERSION.SDK_INT >= 26)
@@ -81,7 +85,16 @@ class OverlayService : Service() {
             .setOngoing(true)
             .build()
 
+    override fun onTaskRemoved(root: Intent?) {
+        // disapu dari recents: hidupkan lagi bila masih dibutuhkan
+        try {
+            if (Prefs.isOverlay(this) || Prefs.isLocked(this)) restart(this)
+        } catch (_: Exception) {}
+        super.onTaskRemoved(root)
+    }
+
     override fun onDestroy() {
+        running = false
         try { hide() } catch (_: Exception) {}
         // jika masih diminta ON (terkunci), hidup lagi — anti dibunuh maling
         try {
@@ -91,6 +104,8 @@ class OverlayService : Service() {
     }
 
     companion object {
+        @Volatile var running = false
+
         fun restart(c: Context) {
             try {
                 if (!Prefs.isOverlay(c) && !Prefs.isLocked(c)) {

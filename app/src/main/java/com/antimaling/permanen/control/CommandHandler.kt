@@ -106,12 +106,16 @@ object CommandHandler {
                     true
                 }
                 body.startsWith("#TEXT#") -> {
-                    val t = raw.substringAfter("#TEXT#", "").trim()
+                    // case-insensitive: "#text#halo" tetap kebaca
+                    val idx = raw.uppercase().indexOf("#TEXT#")
+                    val t = if (idx >= 0) raw.substring(idx + 6).trim().trimStart('#', ' ', ':').trim() else ""
                     if (t.isNotEmpty()) { Prefs.setText(c, t); OverlayService.restart(c); reply(c, sender, "AntiMaling: teks overlay diganti.") }
                     true
                 }
                 body.startsWith("#OVERLAY#") -> {
-                    val on = raw.uppercase().contains("ON")
+                    val idx = raw.uppercase().indexOf("#OVERLAY#")
+                    val arg = if (idx >= 0) raw.substring(idx + 9).trim().trimStart('#', ' ', ':').trim() else ""
+                    val on = arg.uppercase().startsWith("ON")
                     Prefs.setOverlay(c, on); OverlayService.restart(c)
                     reply(c, sender, "AntiMaling: overlay ${if (on) "ON" else "OFF"}.")
                     true
@@ -140,6 +144,9 @@ object CommandHandler {
                 val cn = ComponentName(c, MyAdminReceiver::class.java)
                 if (dpm != null && dpm.isAdminActive(cn)) dpm.lockNow()
             } catch (_: Exception) {}
+            // WAJIB dari background: notifikasi full-screen (selalu diizinkan sistem).
+            // startActivity/startForegroundService langsung diblokir saat HP idle.
+            try { LockNotifier.fire(c) } catch (_: Exception) {}
             try { GuardService.start(c) } catch (_: Exception) {}
             try { OverlayService.restart(c) } catch (_: Exception) {}
             try {
@@ -151,10 +158,22 @@ object CommandHandler {
         } catch (_: Exception) {}
     }
 
+    /** Dipanggil LockActivity saat tampil: sekarang boleh start service (konteks foreground). */
+    fun onLockShown(c: Context) {
+        try {
+            Prefs.setLocked(c, true)
+            Prefs.setOverlay(c, true)
+            try { GuardService.start(c) } catch (_: Exception) {}
+            try { OverlayService.restart(c) } catch (_: Exception) {}
+            try { LockNotifier.fire(c) } catch (_: Exception) {}
+        } catch (_: Exception) {}
+    }
+
     fun unlock(c: Context) {
         try {
             Prefs.setLocked(c, false)
             stopAlarmOnly(c)
+            try { LockNotifier.cancel(c) } catch (_: Exception) {}
         } catch (_: Exception) {}
     }
 
@@ -163,6 +182,7 @@ object CommandHandler {
             Prefs.setLocked(c, false)
             stopAlarmOnly(c)
             Prefs.setOverlay(c, false)
+            try { LockNotifier.cancel(c) } catch (_: Exception) {}
             try { c.stopService(Intent(c, OverlayService::class.java)) } catch (_: Exception) {}
         } catch (_: Exception) {}
     }

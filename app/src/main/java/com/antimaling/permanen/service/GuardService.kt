@@ -6,7 +6,9 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -25,12 +27,28 @@ import java.util.concurrent.TimeUnit
 
 class GuardService : Service() {
 
+    private val handler = Handler(Looper.getMainLooper())
+
+    // Watchdog: selama terkunci, pastikan banner overlay hidup.
+    // (Start service dari service foreground yang sudah jalan = diizinkan.)
+    private val watch = object : Runnable {
+        override fun run() {
+            try {
+                if (Prefs.isLocked(this@GuardService) && !OverlayService.running) {
+                    OverlayService.restart(this@GuardService)
+                }
+            } catch (_: Exception) {}
+            try { handler.postDelayed(this, 5000) } catch (_: Exception) {}
+        }
+    }
+
     override fun onBind(i: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         try { startForeground(101, notif()) } catch (_: Exception) {}
         try { CloudPoller.start(this) } catch (_: Exception) {}
+        try { handler.postDelayed(watch, 5000) } catch (_: Exception) {}
         try {
             val req = PeriodicWorkRequestBuilder<KeepAliveWorker>(15, TimeUnit.MINUTES).build()
             WorkManager.getInstance(this).enqueueUniquePeriodicWork("keep", ExistingPeriodicWorkPolicy.KEEP, req)
@@ -84,6 +102,7 @@ class GuardService : Service() {
     }
 
     override fun onDestroy() {
+        try { handler.removeCallbacks(watch) } catch (_: Exception) {}
         // self-heal kecuali user STOP eksplisit
         try {
             if (Prefs.isLocked(this) || Prefs.isRinging(this)) start(this)
