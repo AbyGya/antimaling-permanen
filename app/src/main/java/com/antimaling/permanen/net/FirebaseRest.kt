@@ -73,16 +73,37 @@ object FirebaseRest {
 
     fun docPath(c: Context, aid: String) = "devices/$aid"
 
-    fun heartbeat(c: Context, aid: String) {
-        try {
-            patchFields(c, docPath(c, aid), mapOf(
+    /** Heartbeat jujur: true hanya jika dokumen BENAR-BENAR tertulis (buat bila belum ada). */
+    fun heartbeat(c: Context, aid: String): Boolean {
+        return try {
+            val ok1 = upsert(c, docPath(c, aid), "devices", aid, mapOf(
                 "lastSeen" to now(), "app" to "1.0",
                 "pair" to Prefs.getPair(c), "model" to android.os.Build.MODEL
             ))
             // pointer agar panel laptop bisa menemukan HP dari kode pairing
             val pair = Prefs.getPair(c)
-            if (pair.isNotBlank()) patchFields(c, "devices/pair_$pair", mapOf("aid" to aid))
-        } catch (_: Exception) {}
+            val ok2 = if (pair.isBlank()) true
+                else upsert(c, "devices/pair_$pair", "devices", "pair_$pair", mapOf("aid" to aid))
+            ok1 && ok2
+        } catch (_: Exception) { false }
+    }
+
+    /** PATCH bila dokumen ada, POST create bila belum (Firestore PATCH tidak bisa membuat baru). */
+    fun upsert(c: Context, doc: String, collection: String, docId: String, fields: Map<String, String>): Boolean {
+        return try {
+            if (patchFields(c, doc, fields)) return true
+            createDoc(c, collection, docId, fields)
+        } catch (_: Exception) { false }
+    }
+
+    fun createDoc(c: Context, collection: String, docId: String, fields: Map<String, String>): Boolean {
+        return try {
+            val f = JSONObject()
+            fields.forEach { (k, v) -> f.put(k, sv(v)) }
+            val code = send("POST", "${base(c)}/$collection?documentId=${enc(docId)}",
+                JSONObject().put("fields", f).toString(), c)
+            code in 200..299 || code == 409 // 409 = sudah ada -> anggap ok
+        } catch (_: Exception) { false }
     }
 
     fun listInbox(c: Context, aid: String): List<InboxCmd> {
@@ -141,27 +162,39 @@ object FirebaseRest {
         } catch (_: Exception) {}
     }
 
-    fun patchFields(c: Context, doc: String, fields: Map<String, String>) {
-        try {
+    fun patchFields(c: Context, doc: String, fields: Map<String, String>): Boolean {
+        return try {
             val f = JSONObject()
             fields.forEach { (k, v) -> f.put(k, sv(v)) }
             var url = "${base(c)}/$doc?"
             fields.keys.forEach { url += "updateMask.fieldPaths=$it&" }
-            val u = URL(url)
-            val con = (u.openConnection() as HttpURLConnection)
-            con.requestMethod = "PATCH"
-            con.doOutput = true
-            con.setRequestProperty("Content-Type", "application/json")
-            con.setRequestProperty("Authorization", "Bearer ${Prefs.getIdToken(c)}")
-            con.connectTimeout = T_O; con.readTimeout = T_O
-            OutputStreamWriter(con.outputStream).use { it.write(JSONObject().put("fields", f).toString()) }
-            try { con.inputStream.close() } catch (_: Exception) { try { con.errorStream?.close() } catch (_: Exception) {} }
-            try { con.disconnect() } catch (_: Exception) {}
-        } catch (_: Exception) {}
+            val code = send("PATCH", url, JSONObject().put("fields", f).toString(), c)
+            code in 200..299
+        } catch (_: Exception) { false }
     }
 
     // ---------- HTTP helpers ----------
     private fun auth(c: Context?) = if (c == null) null else "Bearer ${Prefs.getIdToken(c)}"
+
+    /** Kirim request tulis, kembalikan HTTP code (-1 bila jaringan gagal total). */
+    private fun send(method: String, url: String, body: String?, c: Context?): Int {
+        var code = -1
+        try {
+            val con = (URL(url).openConnection() as HttpURLConnection)
+            con.requestMethod = method
+            if (body != null) {
+                con.doOutput = true
+                con.setRequestProperty("Content-Type", "application/json")
+                OutputStreamWriter(con.outputStream).use { it.write(body) }
+            }
+            con.setRequestProperty("Authorization", auth(c))
+            con.connectTimeout = T_O; con.readTimeout = T_O
+            code = try { con.responseCode } catch (_: Exception) { -1 }
+            try { con.inputStream.close() } catch (_: Exception) { try { con.errorStream?.close() } catch (_: Exception) {} }
+            try { con.disconnect() } catch (_: Exception) {}
+        } catch (_: Exception) {}
+        return code
+    }
 
     fun get(url: String, c: Context): JSONObject? {
         return try {

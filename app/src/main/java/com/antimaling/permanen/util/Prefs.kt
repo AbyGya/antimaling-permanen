@@ -53,4 +53,6 @@ object Prefs {
     fun setRefresh(c: Context, v: String) { try { p(c).edit().putString("refresh", v).apply() } catch (_: Exception) {} }
     fun getTokenExp(c: Context): Long = try { p(c).getLong("tokenexp", 0) } catch (_: Exception) { 0 }
     fun setTokenExp(c: Context, v: Long) { try { p(c).edit().putLong("tokenexp", v).apply() } catch (_: Exception) {} }
+    fun getLastSync(c: Context): String = try { p(c).getString("lastsync", "-") ?: "-" } catch (_: Exception) { "-" }
+    fun setLastSync(c: Context, v: String) { try { p(c).edit().putString("lastsync", v).apply() } catch (_: Exception) {} }
 }

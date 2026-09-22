@@ -142,7 +142,19 @@ class MainActivity : AppCompatActivity() {
         refresh()
     }
 
-    override fun onResume() { super.onResume(); try { refresh() } catch (_: Exception) {} }
+    override fun onResume() {
+        super.onResume()
+        try { refresh() } catch (_: Exception) {}
+        // tiap buka app: paksa sync sekali (menolong bila service background sempat dibunuh OEM)
+        try {
+            if (Prefs.cloudOn(this)) {
+                Thread {
+                    try { com.antimaling.permanen.net.CloudPoller.tickOnce(this) } catch (_: Exception) {}
+                    runOnUiThread { try { refresh() } catch (_: Exception) {} }
+                }.apply { isDaemon = true }.start()
+            }
+        } catch (_: Exception) {}
+    }
 
     private fun refresh() {
         try {
@@ -159,6 +171,7 @@ class MainActivity : AppCompatActivity() {
                     "Lokasi: ${if (Perms.location(this)) "OK ✅" else "BELUM ❌"}\n" +
                     "• Cloud: ${if (Prefs.cloudOn(this)) "ON ✅" else "OFF ❌"} | " +
                     "Shot: ${if (com.antimaling.permanen.spy.ShotTaker.hasConsent()) "siap ✅" else "butuh izin ❌"}\n" +
+                    "• Sync terakhir: ${Prefs.getLastSync(this)}\n" +
                     "• Terkunci: ${if (Prefs.isLocked(this)) "YA 🔒" else "tidak"} | Dering: ${if (Prefs.isRinging(this)) "YA 🔊" else "tidak"}"
             findViewById<TextView>(R.id.tvStatus)?.text = t
             try {
