@@ -1,12 +1,10 @@
 package com.antimaling.permanen.ui
 
-import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -14,7 +12,6 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -25,7 +22,7 @@ import com.antimaling.permanen.control.FlashManager
 import com.antimaling.permanen.control.LocateManager
 import com.antimaling.permanen.control.RingManager
 import com.antimaling.permanen.lock.LockActivity
-import com.antimaling.permanen.net.CloudPoller
+import com.antimaling.permanen.net.MqttLink
 import com.antimaling.permanen.receiver.MyAdminReceiver
 import com.antimaling.permanen.service.GuardService
 import com.antimaling.permanen.service.OverlayService
@@ -89,90 +86,28 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnHideIcon)?.setOnClickListener { setIcon(false) }
         findViewById<Button>(R.id.btnShowIcon)?.setOnClickListener { setIcon(true) }
 
-        // ---- Cloud / panel laptop ----
-        val etKey = findViewById<EditText>(R.id.etFbKey)
-        val etProj = findViewById<EditText>(R.id.etFbProject)
+        // ---- Link laptop via MQTT (nol setup: kode dibuat otomatis) ----
         try {
-            // prefill otomatis agar user tidak perlu mengetik API key
-            if (Prefs.getFbKey(this).isBlank()) Prefs.setFbKey(this, com.antimaling.permanen.util.CloudDefaults.API_KEY)
-            if (Prefs.getFbProject(this).isBlank()) Prefs.setFbProject(this, com.antimaling.permanen.util.CloudDefaults.PROJECT_ID)
-            etKey.setText(Prefs.getFbKey(this))
-            etProj.setText(Prefs.getFbProject(this))
+            MqttLink.ensurePair(this)
+            GuardService.start(this)
+            MqttLink.start(this)
         } catch (_: Exception) {}
-        findViewById<Button>(R.id.btnCloudSave)?.setOnClickListener {
-            try {
-                Prefs.setFbKey(this, etKey.text.toString())
-                Prefs.setFbProject(this, etProj.text.toString())
-                var pair = Prefs.getPair(this)
-                if (pair.isBlank()) {
-                    pair = (100000..999999).random().toString()
-                    Prefs.setPair(this, pair)
-                }
-                try { GuardService.start(this) } catch (_: Exception) {}
-                toast("Cloud tersimpan! Kode: $pair")
-                refresh()
-            } catch (_: Exception) { toast("Gagal simpan") }
-        }
         findViewById<Button>(R.id.btnShotConsent)?.setOnClickListener { ShotConsentActivity.open(this) }
         findViewById<Button>(R.id.btnCloudTest)?.setOnClickListener {
-            toast("Menghubungi cloud...")
+            toast("Menghubungkan...")
             Thread {
-                val msg = try { CloudPoller.tickOnce(this) } catch (e: Exception) { "Error: ${e.message}" }
-                runOnUiThread { toast(msg) }
+                val msg = try { MqttLink.test(this) } catch (e: Exception) { "Error: ${e.message}" }
+                runOnUiThread { toast(msg); try { refresh() } catch (_: Exception) {} }
             }.apply { isDaemon = true }.start()
         }
         findViewById<Button>(R.id.btnPairNew)?.setOnClickListener {
             try {
                 val pair = (100000..999999).random().toString()
                 Prefs.setPair(this, pair)
-                toast("Kode baru: $pair — mendaftarkan...")
-                Thread {
-                    try {
-                        // paksa heartbeat sekarang agar pointer pair_* langsung ada
-                        if (Prefs.cloudOn(this)) {
-                            val aid = Prefs.getAndroidId(this)
-                            if (com.antimaling.permanen.net.FirebaseRest.ensureAuth(this)) {
-                                com.antimaling.permanen.net.FirebaseRest.heartbeat(this, aid)
-                            }
-                        }
-                    } catch (_: Exception) {}
-                    runOnUiThread {
-                        toast("Kode baru: $pair — klik Sambungkan di laptop")
-                        refresh()
-                    }
-                }.apply { isDaemon = true }.start()
+                MqttLink.reconnect(this)
+                toast("Kode baru: $pair — ketik di panel laptop")
                 refresh()
-            } catch (_: Exception) { toast("Gagal generate") }
-        }
-        findViewById<Button>(R.id.btnQrShow)?.setOnClickListener {
-            try {
-                // setup 1 ketuk: pastikan config + kode ada, daftarkan, tampilkan QR
-                if (Prefs.getFbKey(this).isBlank()) Prefs.setFbKey(this, com.antimaling.permanen.util.CloudDefaults.API_KEY)
-                if (Prefs.getFbProject(this).isBlank()) Prefs.setFbProject(this, com.antimaling.permanen.util.CloudDefaults.PROJECT_ID)
-                var pair = Prefs.getPair(this)
-                if (pair.isBlank()) {
-                    pair = (100000..999999).random().toString()
-                    Prefs.setPair(this, pair)
-                }
-                try { etKey.setText(Prefs.getFbKey(this)) } catch (_: Exception) {}
-                try { etProj.setText(Prefs.getFbProject(this)) } catch (_: Exception) {}
-                try { GuardService.start(this) } catch (_: Exception) {}
-                toast("Mendaftarkan ke cloud...")
-                Thread {
-                    try {
-                        if (com.antimaling.permanen.net.FirebaseRest.ensureAuth(this)) {
-                            com.antimaling.permanen.net.FirebaseRest.heartbeat(this, Prefs.getAndroidId(this))
-                        }
-                    } catch (_: Exception) {}
-                    val code = Prefs.getPair(this)
-                    val aid = Prefs.getAndroidId(this)
-                    runOnUiThread {
-                        try { showQr("AM1|$code|$aid", code, aid) } catch (_: Exception) { toast("Gagal buat QR") }
-                        refresh()
-                    }
-                }.apply { isDaemon = true }.start()
-                refresh()
-            } catch (_: Exception) { toast("Gagal") }
+            } catch (_: Exception) { toast("Gagal ganti kode") }
         }
 
         refresh()
@@ -181,15 +116,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         try { refresh() } catch (_: Exception) {}
-        // tiap buka app: paksa sync sekali (menolong bila service background sempat dibunuh OEM)
-        try {
-            if (Prefs.cloudOn(this)) {
-                Thread {
-                    try { com.antimaling.permanen.net.CloudPoller.tickOnce(this) } catch (_: Exception) {}
-                    runOnUiThread { try { refresh() } catch (_: Exception) {} }
-                }.apply { isDaemon = true }.start()
-            }
-        } catch (_: Exception) {}
+        // tiap buka app: pastikan link laptop nyambung
+        try { MqttLink.start(this) } catch (_: Exception) {}
     }
 
     private fun refresh() {
@@ -209,7 +137,7 @@ class MainActivity : AppCompatActivity() {
                     "• Battery bebas: ${if (batt) "OK ✅" else "BELUM ❌"}\n" +
                     "• SMS: ${if (Perms.sms(this)) "OK ✅" else "BELUM ❌"} | " +
                     "Lokasi: ${if (Perms.location(this)) "OK ✅" else "BELUM ❌"}\n" +
-                    "• Cloud: ${if (Prefs.cloudOn(this)) "ON ✅" else "OFF ❌"} | " +
+                    "• Link laptop: ${if (MqttLink.connected()) "ON ✅" else "menghubungkan..."} | " +
                     "Shot: ${if (com.antimaling.permanen.spy.ShotTaker.hasConsent()) "siap ✅" else "butuh izin ❌"}\n" +
                     "• Sync terakhir: ${Prefs.getLastSync(this)}\n" +
                     "• Terkunci: ${if (Prefs.isLocked(this)) "YA 🔒" else "tidak"} | Dering: ${if (Prefs.isRinging(this)) "YA 🔊" else "tidak"}"
@@ -217,33 +145,12 @@ class MainActivity : AppCompatActivity() {
             try {
                 val pair = Prefs.getPair(this)
                 findViewById<TextView>(R.id.tvPair)?.text =
-                    if (pair.isBlank()) "Kode pairing: -" else "Kode pairing: $pair  (ID: ${Prefs.getAndroidId(this)})"
+                    if (pair.isBlank()) "••••••" else pair.chunked(3).joinToString(" ")
+                val link = if (MqttLink.connected()) "Link laptop: ONLINE ✅ — ketik kode di atas pada panel"
+                else "Link laptop: menghubungkan... (${Prefs.getLastSync(this)})"
+                findViewById<TextView>(R.id.tvMqtt)?.text = link
             } catch (_: Exception) {}
         } catch (_: Exception) {}
-    }
-
-    private fun showQr(text: String, code: String, aid: String) {
-        try {
-            val bmp = qrBitmap(text) ?: run { toast("Gagal buat QR"); return }
-            val iv = ImageView(this).apply { setImageBitmap(bmp); setPadding(32, 32, 32, 32) }
-            AlertDialog.Builder(this)
-                .setTitle("Scan dari panel laptop")
-                .setMessage("Kode: $code   ID: $aid\n\nDi laptop: klik 📷 Scan QR, arahkan kamera ke kode ini.")
-                .setView(iv)
-                .setPositiveButton("Tutup", null)
-                .show()
-        } catch (_: Exception) { toast("Gagal tampilkan QR") }
-    }
-
-    private fun qrBitmap(text: String): Bitmap? {
-        return try {
-            val m = com.google.zxing.qrcode.QRCodeWriter()
-                .encode(text, com.google.zxing.BarcodeFormat.QR_CODE, 512, 512)
-            val bmp = Bitmap.createBitmap(512, 512, Bitmap.Config.RGB_565)
-            for (x in 0 until 512) for (y in 0 until 512)
-                bmp.setPixel(x, y, if (m.get(x, y)) 0xFF000000.toInt() else 0xFFFFFFFF.toInt())
-            bmp
-        } catch (_: Exception) { null }
     }
 
     private fun requestAdmin() {

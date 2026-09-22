@@ -72,11 +72,13 @@ Lihat juga `tanam-permanen.sh`.
 - Notification channel selalu dibuat sebelum `startForeground` (wajib Android 8+)
 - Foreground type `location|specialUse` + property (wajib Android 14)
 
-## 5. Kontrol dari Laptop (baru ✨)
-Tanpa IP publik — lewat Firebase. HP polling tiap 10 dtk, panel web realtime.
+## 5. Kontrol dari Laptop (MQTT — tanpa setup ✨)
+Tanpa daftar akun, tanpa API key, tanpa Firebase. Buka app 1x → kode 6 digit
+muncul otomatis → ketik di panel laptop → online. HP ↔ laptop via broker MQTT
+publik (realtime + status online akurat).
 Fitur remote: kunci/buka (PIN), dering max, lacak, senter, overlay, teks custom,
-**screenshot layar**, **foto kamera depan/belakang**, info HP, status online/offline.
-Lihat `laptop-panel/README.md` + `firestore.rules`. Panel: `cd laptop-panel && python3 server.py`.
+**screenshot layar**, **foto kamera depan/belakang**, info HP.
+Panel: `cd laptop-panel && python3 server.py`.
 
 ## Struktur
 ```

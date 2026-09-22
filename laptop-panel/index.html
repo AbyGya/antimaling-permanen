@@ -5,13 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AntiMaling — Panel Kontrol</title>
 <link rel="stylesheet" href="styles.css">
-<script type="importmap">
-{ "imports": {
-  "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
-  "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
-  "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
-} }
-</script>
 </head>
 <body>
 <div class="bg"></div>
@@ -28,22 +21,10 @@
   <section class="card" id="pairCard">
     <h2>🔗 Pairing</h2>
     <div class="row">
-      <input id="pairCode" placeholder="Kode pairing 6 digit (dari app HP)" maxlength="6">
+      <input id="pairCode" placeholder="Kode 6 digit dari layar HP" maxlength="6" inputmode="numeric">
       <button id="btnConnect" class="primary">Sambungkan</button>
     </div>
-    <div class="row">
-      <input id="aidInput" placeholder="atau ID perangkat langsung (lihat di app HP, mis. a1b2c3d4)">
-      <button id="btnDirect">Sambung via ID</button>
-    </div>
-    <div class="row">
-      <button id="btnScan" class="primary">📷 Scan QR dari HP</button>
-    </div>
-    <div id="scanBox" class="hidden">
-      <video id="cam" playsinline muted></video>
-      <canvas id="cap" class="hidden"></canvas>
-      <p class="hint" id="scanStat">Arahkan kamera ke QR di layar HP… <button id="btnScanStop" class="mini">stop</button></p>
-    </div>
-    <p class="hint">Isi <b>firebase-config.js</b> dengan API Key + Project ID Firebase dulu, lalu masukkan kode pairing dari HP.</p>
+    <p class="hint">Tanpa daftar / API key. Buka app HP → kode besar tampil otomatis → ketik di sini.</p>
   </section>
 
   <section class="card hidden" id="dash">
@@ -81,8 +62,8 @@
   </section>
 </main>
 
-<footer><p>HP polling tiap 10 detik • hasil realtime • hanya untuk perangkat milik sendiri</p></footer>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script type="module" src="app.js"></script>
+<footer><p>HP ↔ laptop via MQTT realtime • hanya untuk perangkat milik sendiri</p></footer>
+<script src="https://unpkg.com/mqtt@5.10.4/dist/mqtt.min.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

@@ -1,27 +1,28 @@
-# 💻 Panel Kontrol Laptop
+# 💻 Panel Kontrol Laptop (MQTT — tanpa setup)
 
-Kontrol HP kapan saja selama HP online. Tanpa IP publik / port-forward — lewat Firebase.
+Kontrol HP kapan saja selama HP online. Tanpa daftar akun, tanpa API key,
+tanpa Firebase Console. HP dan laptop bertemu lewat kode 6 digit di broker publik.
 
-## Setup sekali (5 menit)
+## Pakai (2 menit)
 
-1. **Firebase**: console.firebase.google.com → buat project → aktifkan:
-   - **Firestore Database** (mode production) → tab **Rules** → copy isi `../firestore.rules` → Publish
-   - **Authentication** → Sign-in method → aktifkan **Anonymous**
-   - Project settings → salin **Web API Key** + **Project ID**
-2. **HP**: buka AntiMaling → bagian *5. Kontrol Laptop* → tempel API Key + Project ID → *Simpan & Generate* → catat **kode pairing 6 digit**. Klik juga *Aktifkan Sadap Layar* (wajib ulang tiap reboot HP).
-3. **Laptop**: edit `firebase-config.js` (apiKey + projectId) → jalankan:
+1. **HP**: install APK → buka app 1x → kode 6 digit tampil besar otomatis.
+2. **Laptop**:
    ```bash
    cd laptop-panel
    python3 server.py
    ```
-   Browser terbuka otomatis → masukkan kode pairing → **Sambungkan**.
+   Browser terbuka → ketik 6 digit → **Sambungkan** → status **● online**.
+3. Klik perintah: Ping, Info, Kunci, Dering MAX, Stop, Lacak, Screenshot,
+   Foto depan/belakang, Senter, Overlay ON/OFF, teks custom, buka kunci (PIN).
+   Hasil (teks + foto) muncul realtime di feed.
 
-## Pakai
-- Status **online** = HP kirim heartbeat < 30 dtk. Polling HP tiap 10 dtk.
-- Tombol: Ping, Info, Kunci, Dering MAX, Stop, Lacak, **Screenshot**, **Foto depan/belakang**, Senter, Overlay ON/OFF, teks custom, buka kunci (PIN).
-- Hasil (teks + foto) muncul realtime di feed. Buka kunci butuh PIN pemilik.
+## Cara kerja
+- Topik `am/{kode}/cmd` (laptop → HP), `am/{kode}/res` (HP → laptop),
+  `am/{kode}/status` (online/offline akurat via retained + LWT).
+- Broker: `broker.emqx.io` (publik, gratis). Kode acak = privasi (topik tak bisa ditebak).
+- Ganti kode kapan saja via tombol **Ganti Kode Baru** di HP.
 
 ## Batasan jujur
-- Screenshot butuh izin screen-capture yang **hangus tiap reboot** (aturan Android, semua app sama).
-- Foto background butuh izin kamera + HP tidak dalam mode Doze berat.
-- Jangan dipakai di HP orang lain tanpa izin — melanggar hukum (UU ITE).
+- Butuh internet di kedua sisi. Broker publik best-effort (untuk pribadi lebih dari cukup).
+- Screenshot butuh izin screen-capture yang hangus tiap reboot (aturan Android).
+- Hanya untuk HP milik sendiri — sadap HP orang tanpa izin melanggar UU ITE.
