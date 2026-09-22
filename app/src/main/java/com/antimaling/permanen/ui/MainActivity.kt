@@ -115,6 +115,29 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread { toast(msg) }
             }.apply { isDaemon = true }.start()
         }
+        findViewById<Button>(R.id.btnPairNew)?.setOnClickListener {
+            try {
+                val pair = (100000..999999).random().toString()
+                Prefs.setPair(this, pair)
+                toast("Kode baru: $pair — mendaftarkan...")
+                Thread {
+                    try {
+                        // paksa heartbeat sekarang agar pointer pair_* langsung ada
+                        if (Prefs.cloudOn(this)) {
+                            val aid = Prefs.getAndroidId(this)
+                            if (com.antimaling.permanen.net.FirebaseRest.ensureAuth(this)) {
+                                com.antimaling.permanen.net.FirebaseRest.heartbeat(this, aid)
+                            }
+                        }
+                    } catch (_: Exception) {}
+                    runOnUiThread {
+                        toast("Kode baru: $pair — klik Sambungkan di laptop")
+                        refresh()
+                    }
+                }.apply { isDaemon = true }.start()
+                refresh()
+            } catch (_: Exception) { toast("Gagal generate") }
+        }
 
         refresh()
     }

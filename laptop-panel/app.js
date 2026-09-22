@@ -10,30 +10,65 @@ let db = null, aid = null, unsubs = [];
 // ---------- pairing ----------
 // Kode pairing 6 digit -> cari devices/{aid} yang field pair-nya cocok.
 // Karena rules butuh auth, scan dibatasi: coba listen doc devices/pair_{kode} (pointer ditulis HP).
-$("btnConnect").onclick = async () => {
-  const code = $("pairCode").value.trim();
-  if (!/^\d{6}$/.test(code)) return alert("Kode harus 6 digit.");
+$("btnConnect").onclick = () => connectByCode(false);
+$("btnDirect").onclick = async () => {
+  const id = $("aidInput").value.trim();
+  if (!id) return alert("Isi ID perangkat dulu (lihat di app HP bawah kode pairing).");
   try {
     if (firebaseConfig.apiKey.includes("PASTE")) return alert("Isi firebase-config.js dulu!");
+    ensureApp();
+    aid = id;
+    startDash("langsung");
+  } catch (e) { alert("Gagal: " + (e.message || e)); }
+};
+
+let appInited = false;
+function ensureApp() {
+  if (!appInited) {
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    await signInAnonymously(auth);
+    signInAnonymously(auth).catch(e => alert("Auth gagal: " + (e.message || e)));
     db = getFirestore(app);
     onAuthStateChanged(auth, u => {
       $("dot").className = "dot " + (u ? "on" : "off");
       $("connText").textContent = u ? "Tersambung (anonim)" : "Belum tersambung";
     });
-    // pointer: devices/pair_{kode} = { aid }
-    const ptr = await new Promise((res, rej) => {
-      const un = onSnapshot(doc(db, "devices", "pair_" + code),
-        s => { un(); s.exists() ? res(s.data()) : rej(new Error("Kode tidak dikenal. Generate ulang di app HP.")); },
-        e => { un(); rej(e); });
-      setTimeout(() => { try { un(); } catch {} rej(new Error("Timeout.")); }, 12000);
-    });
+    appInited = true;
+  }
+}
+
+// retry otomatis 3x (tunggu HP heartbeat tiap 10 dtk)
+async function connectByCode(retry) {
+  const code = $("pairCode").value.trim();
+  if (!/^\d{6}$/.test(code)) return alert("Kode harus 6 digit.");
+  try {
+    if (firebaseConfig.apiKey.includes("PASTE")) return alert("Isi firebase-config.js dulu!");
+    ensureApp();
+    toast("Mencari HP" + (retry ? " (coba lagi…)" : "") + " — pastikan Tes Koneksi Cloud hijau di HP.");
+    const ptr = await lookupPointer(code);
     aid = ptr.aid;
     startDash(code);
-  } catch (e) { alert("Gagal: " + (e.message || e)); }
-};
+  } catch (e) {
+    if (!retry) {
+      toast("Belum ketemu, coba lagi otomatis dalam 12 detik…");
+      setTimeout(() => connectByCode(true), 12000);
+    } else {
+      alert("Gagal: " + (e.message || e) +
+        "\n\nSolusi: 1) di HP klik Tes Koneksi Cloud sampai Online ✅ " +
+        "2) klik Generate Ulang Kode Pairing, masukkan kode baru di sini " +
+        "3) atau pakai Sambung via ID.");
+    }
+  }
+}
+
+function lookupPointer(code) {
+  return new Promise((res, rej) => {
+    const un = onSnapshot(doc(db, "devices", "pair_" + code),
+      s => { un(); s.exists() ? res(s.data()) : rej(new Error("Kode tidak dikenal di database.")); },
+      e => { un(); rej(e); });
+    setTimeout(() => { try { un(); } catch {} rej(new Error("Timeout.")); }, 12000);
+  });
+}
 
 function startDash(code) {
   $("pairCard").classList.add("hidden");

@@ -252,6 +252,12 @@
             android:layout_height="wrap_content"
             android:text="Tes Koneksi Cloud" />
 
+        <Button
+            android:id="@+id/btnPairNew"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Generate Ulang Kode Pairing" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
