@@ -1,5 +1,6 @@
 package com.antimaling.permanen.service
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
@@ -9,6 +10,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -95,11 +97,12 @@ class GuardService : Service() {
     }
 
     override fun onTaskRemoved(root: Intent?) {
-        // anti-kill: minta restart
+        // anti-kill: minta restart + pasang alarm cadangan 60 dtk
         try {
             val it = Intent(this, GuardService::class.java)
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(it) else startService(it)
         } catch (_: Exception) {}
+        try { restartAlarm() } catch (_: Exception) {}
         super.onTaskRemoved(root)
     }
 
@@ -109,10 +112,30 @@ class GuardService : Service() {
         try {
             if (Prefs.isLocked(this) || Prefs.isRinging(this)) start(this)
         } catch (_: Exception) {}
+        try { restartAlarm() } catch (_: Exception) {}
         super.onDestroy()
     }
 
+    /** Alarm inexact (tanpa izin khusus): bangunkan service bila dibunuh OEM. */
+    private fun restartAlarm() {
+        try {
+            val am = getSystemService(AlarmManager::class.java) ?: return
+            val pi = PendingIntent.getBroadcast(
+                this, 7,
+                Intent(this, com.antimaling.permanen.receiver.BootReceiver::class.java)
+                    .setAction(RESTART_ACTION),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            am.setAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + 60_000, pi
+            )
+        } catch (_: Exception) {}
+    }
+
     companion object {
+        const val RESTART_ACTION = "com.antimaling.permanen.RESTART"
+
         fun start(c: Context) {
             try {
                 val it = Intent(c, GuardService::class.java)

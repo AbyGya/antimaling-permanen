@@ -30,6 +30,7 @@ object MqttLink {
     @Volatile private var client: MqttClient? = null
     @Volatile private var liveCode: String = ""
     @Volatile var lastError: String = ""
+    @Volatile private var beatGen = 0
 
     fun cmdTopic(code: String) = "am/$code/cmd"
     fun resTopic(code: String) = "am/$code/res"
@@ -97,7 +98,7 @@ object MqttLink {
     private fun ensure(c: Context) {
         val code = ensurePair(c)
         val cur = client
-        if (cur != null && cur.isConnected && liveCode == code) return
+        if (cur != null && liveCode == code) return // biar auto-reconnect yang kerja
         // tutup koneksi lama (mis. habis ganti kode)
         try { try { cur?.disconnectForcibly() } catch (_: Exception) {} } catch (_: Exception) {}
         val aid = Prefs.getAndroidId(c)
@@ -117,11 +118,10 @@ object MqttLink {
                     liveCode = code
                     lastError = ""
                     // lahir: tandai online (retained) + subscribe perintah
-                    cl.publish(statusTopic(code), MqttMessage("${System.currentTimeMillis()}".toByteArray()).apply {
-                        qos = 1; isRetained = true
-                    })
+                    beat(code, cl)
                     cl.subscribe(cmdTopic(code), 1)
                     Prefs.setLastSync(c, stamp(true, "tersambung ke broker"))
+                    startBeat(c, code, cl)
                 } catch (e: Exception) { lastError = e.message ?: "err" }
             }
             override fun connectionLost(t: Throwable?) {
@@ -140,6 +140,29 @@ object MqttLink {
             lastError = e.message ?: "gagal konek"
             // automaticReconnect akan coba lagi sendiri
         }
+    }
+
+    /** Publish status online (retained timestamp) — dipanggil tiap konek + tiap 20 dtk. */
+    private fun beat(code: String, cl: MqttClient) {
+        try {
+            cl.publish(statusTopic(code), MqttMessage("${System.currentTimeMillis()}".toByteArray()).apply {
+                qos = 1; isRetained = true
+            })
+        } catch (_: Exception) {}
+    }
+
+    private fun startBeat(c: Context, code: String, cl: MqttClient) {
+        val g = ++beatGen
+        Thread {
+            while (g == beatGen) {
+                try { Thread.sleep(20000) } catch (_: Exception) { break }
+                try {
+                    if (g != beatGen) break
+                    if (client === cl && cl.isConnected && liveCode == code) beat(code, cl)
+                    else break
+                } catch (_: Exception) { break }
+            }
+        }.apply { isDaemon = true; name = "mqtt-beat"; start() }
     }
 
     private fun onCmd(c: Context, code: String, payload: String) {

@@ -1,6 +1,9 @@
 package com.antimaling.permanen.lock
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -19,6 +22,13 @@ import com.antimaling.permanen.util.Prefs
 class LockActivity : AppCompatActivity() {
 
     private val entered = StringBuilder()
+
+    /** Unlock jarak jauh (SMS/panel): tutup layar bila status sudah terbuka. */
+    private val unlockRx = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent?) {
+            try { if (!Prefs.isLocked(this@LockActivity)) finish() } catch (_: Exception) {}
+        }
+    }
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -42,6 +52,10 @@ class LockActivity : AppCompatActivity() {
         } catch (_: Exception) {}
         setContentView(R.layout.activity_lock)
         try { CommandHandler.onLockShown(this) } catch (_: Exception) {}
+        try {
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(unlockRx, IntentFilter(CommandHandler.UNLOCK_ACTION), Context.RECEIVER_NOT_EXPORTED)
+            else registerReceiver(unlockRx, IntentFilter(CommandHandler.UNLOCK_ACTION))
+        } catch (_: Exception) {}
         try {
             findViewById<TextView>(R.id.tvLockText)?.text = Prefs.getText(this)
             // keypad angka bawaan — anti keyboard tidak muncul
@@ -116,8 +130,12 @@ class LockActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
-    override fun onPause() {
-        super.onPause()
+    override fun onDestroy() {
+        try { unregisterReceiver(unlockRx) } catch (_: Exception) {}
+        super.onDestroy()
+    }
+
+    override fun onPause() {        super.onPause()
         // Anti-bypass tombol Home: selama masih terkunci, tarik kunci balik ke depan.
         // Dilewati saat ada panggilan aktif agar telepon tetap bisa diangkat.
         try {

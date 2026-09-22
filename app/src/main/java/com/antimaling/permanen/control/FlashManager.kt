@@ -8,6 +8,7 @@ import com.antimaling.permanen.util.Perms
 object FlashManager {
     @Volatile private var running = false
     @Volatile private var thread: Thread? = null
+    @Volatile private var gen = 0
 
     fun start(c: Context, seconds: Int = 60) {
         try {
@@ -17,12 +18,13 @@ object FlashManager {
             }
             stop(c)
             running = true
+            val g = ++gen
             val cm = c.getSystemService(CameraManager::class.java) ?: return
             val camId = try { cm.cameraIdList.firstOrNull() ?: return } catch (_: Exception) { return }
             val end = System.currentTimeMillis() + seconds * 1000L
             thread = Thread {
                 try {
-                    while (running && System.currentTimeMillis() < end) {
+                    while (running && g == gen && System.currentTimeMillis() < end) {
                         try { cm.setTorchMode(camId, true) } catch (_: Exception) { break }
                         sleep(350)
                         try { cm.setTorchMode(camId, false) } catch (_: Exception) { break }
@@ -37,9 +39,11 @@ object FlashManager {
 
     fun stop(c: Context) {
         try {
+            gen++ // bunuh SEMUA thread kedip dari start() manapun
             running = false
             thread?.interrupt()
             thread = null
+            try { Thread.sleep(50) } catch (_: Exception) {}
             try {
                 val cm = c.getSystemService(CameraManager::class.java)
                 val id = try { cm?.cameraIdList?.firstOrNull() } catch (_: Exception) { null }

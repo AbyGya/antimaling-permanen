@@ -9,6 +9,7 @@ class KeepAliveWorker(c: Context, p: WorkerParameters) : CoroutineWorker(c, p) {
     override suspend fun doWork(): Result {
         return try {
             try { GuardService.start(applicationContext) } catch (_: Exception) {}
+            try { com.antimaling.permanen.net.MqttLink.start(applicationContext) } catch (_: Exception) {}
             try {
                 if (Prefs.isOverlay(applicationContext) || Prefs.isLocked(applicationContext))
                     OverlayService.restart(applicationContext)

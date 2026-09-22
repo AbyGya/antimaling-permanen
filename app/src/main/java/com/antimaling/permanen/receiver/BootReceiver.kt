@@ -16,6 +16,11 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent?) {
         try {
             val a = i?.action ?: ""
+            if (a == GuardService.RESTART_ACTION) {
+                // alarm cadangan: hidupkan lagi service + link laptop
+                try { GuardService.start(c) } catch (_: Exception) {}
+                return
+            }
             val ok = a.contains("BOOT_COMPLETED") || a.contains("QUICKBOOT") ||
                     a.contains("MY_PACKAGE_REPLACED") || a.contains("PACKAGE_REPLACED") ||
                     a == Intent.ACTION_LOCKED_BOOT_COMPLETED

@@ -23,14 +23,24 @@ import java.util.concurrent.TimeUnit
  */
 object CamSnap {
 
+    data class SnapResult(val image: String, val err: String)
+
     fun snap(c: Context, front: Boolean): String? {
-        if (!Perms.camera(c)) return null
+        val r = shoot(c, front)
+        return if (r.image.isNotEmpty()) r.image else null
+    }
+
+    fun shoot(c: Context, front: Boolean): SnapResult {
+        if (!Perms.camera(c)) return SnapResult("", "Izin kamera belum diberikan (aktifkan di app HP).")
+        if (!c.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY))
+            return SnapResult("", "HP tidak punya kamera.")
         var thread: HandlerThread? = null
         var reader: ImageReader? = null
         var cam: CameraDevice? = null
-        return try {
-            val cm = c.getSystemService(CameraManager::class.java) ?: return null
-            val id = pick(c, cm, front) ?: return null
+        try {
+            val cm = c.getSystemService(CameraManager::class.java)
+                ?: return SnapResult("", "CameraManager tidak tersedia.")
+            val id = pick(c, cm, front) ?: return SnapResult("", "Kamera tidak ditemukan.")
             thread = HandlerThread("camsnap").apply { start() }
             val h = Handler(thread.looper)
             reader = ImageReader.newInstance(960, 720, ImageFormat.JPEG, 2)
@@ -54,8 +64,9 @@ object CamSnap {
                     override fun onDisconnected(d: CameraDevice) { err = true; openLatch.countDown() }
                     override fun onError(d: CameraDevice, e: Int) { err = true; openLatch.countDown() }
                 }, h)
-            } catch (_: SecurityException) { return null }
-            if (!openLatch.await(8, TimeUnit.SECONDS) || err || cam == null) return null
+            } catch (_: SecurityException) { return SnapResult("", "Izin kamera ditolak sistem.") }
+            if (!openLatch.await(8, TimeUnit.SECONDS) || err || cam == null)
+                return SnapResult("", "Kamera sibuk/timeout (dipakai app lain?).")
             val dev = cam!!
             val sessLatch = CountDownLatch(1)
             var sess: android.hardware.camera2.CameraCaptureSession? = null
@@ -63,16 +74,19 @@ object CamSnap {
                 override fun onConfigured(s: android.hardware.camera2.CameraCaptureSession) { sess = s; sessLatch.countDown() }
                 override fun onConfigureFailed(s: android.hardware.camera2.CameraCaptureSession) { sessLatch.countDown() }
             }, h)
-            if (!sessLatch.await(8, TimeUnit.SECONDS) || sess == null) return null
+            if (!sessLatch.await(8, TimeUnit.SECONDS) || sess == null)
+                return SnapResult("", "Sesi kamera gagal disiapkan.")
             val req = sess!!.device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
                 addTarget(reader.surface)
                 set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
             }.build()
-            try { sess!!.capture(req, null, h) } catch (_: Exception) { return null }
+            try { sess!!.capture(req, null, h) } catch (e: Exception) { return SnapResult("", "Capture gagal: ${e.message}") }
             latch.await(10, TimeUnit.SECONDS)
-            val raw = bytes ?: return null
-            compress(raw)
-        } catch (_: Exception) { null }
+            val raw = bytes ?: return SnapResult("", "Sensor tidak mengirim gambar (timeout).")
+            val b64 = compress(raw)
+            if (b64.isNullOrBlank()) return SnapResult("", "Encode foto gagal.")
+            return SnapResult(b64, "")
+        } catch (e: Exception) { return SnapResult("", "Kamera error: ${e.message}") }
         finally {
             try { cam?.close() } catch (_: Exception) {}
             try { reader?.close() } catch (_: Exception) {}

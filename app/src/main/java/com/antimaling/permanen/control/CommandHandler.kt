@@ -20,18 +20,25 @@ object CommandHandler {
 
     data class CloudResult(val text: String, val image: String = "")
 
+    /** Broadcast agar LockActivity yang sedang tampil langsung tutup. */
+    const val UNLOCK_ACTION = "com.antimaling.permanen.UNLOCK"
+
+    private fun announceUnlock(c: Context) {
+        try { c.sendBroadcast(Intent(UNLOCK_ACTION)) } catch (_: Exception) {}
+    }
+
     /** Eksekutor perintah dari panel laptop (tanpa butuh PIN, channel sudah privat per pairing). */
     fun execCloud(c: Context, type: String, arg: String): CloudResult {
         return try {
             when (type.lowercase()) {
                 "lock" -> { lock(c); CloudResult("🔒 HP dikunci + overlay ON.") }
                 "unlock" -> {
-                    if (arg == Prefs.getPin(c)) { unlock(c); CloudResult("🔓 Kunci dibuka.") }
+                    if (arg.trim() == Prefs.getPin(c)) { unlock(c); CloudResult("🔓 Kunci dibuka.") }
                     else CloudResult("❌ PIN salah.")
                 }
                 "ring" -> { RingManager.start(c); CloudResult("🔊 Dering MAX dimulai.") }
                 "stop" -> { stopAll(c); CloudResult("🔇 Semua alarm berhenti.") }
-                "locate" -> CloudResult("📍 " + LocateManager.lastText(c))
+                "locate" -> CloudResult(LocateManager.link(c))
                 "flash" -> {
                     val s = arg.filter { it.isDigit() }.toIntOrNull() ?: 60
                     FlashManager.start(c, s.coerceIn(5, 300)); RingManager.start(c)
@@ -47,15 +54,15 @@ object CommandHandler {
                     CloudResult("🖼 Overlay ${if (on) "ON" else "OFF"}.")
                 }
                 "shot" -> {
-                    val img = ShotTaker.capture(c)
-                    if (img == null) CloudResult("❌ Screenshot gagal. Beri izin 'Sadap Layar' di app HP (hangus tiap reboot).")
-                    else CloudResult("📸 Screenshot layar:", img)
+                    val r = ShotTaker.shot(c)
+                    if (r.image.isEmpty()) CloudResult("❌ ${r.err.ifBlank { "Screenshot gagal." }}")
+                    else CloudResult("📸 Screenshot layar:", r.image)
                 }
                 "photo" -> {
                     val front = !arg.lowercase().contains("back")
-                    val img = CamSnap.snap(c, front)
-                    if (img == null) CloudResult("❌ Foto gagal (cek izin kamera).")
-                    else CloudResult(if (front) "📷 Kamera depan:" else "📷 Kamera belakang:", img)
+                    val r = CamSnap.shoot(c, front)
+                    if (r.image.isEmpty()) CloudResult("❌ ${r.err.ifBlank { "Foto gagal." }}")
+                    else CloudResult(if (front) "📷 Kamera depan:" else "📷 Kamera belakang:", r.image)
                 }
                 "info" -> CloudResult(DeviceInfo.text(c))
                 "ping" -> CloudResult("✅ HP online.")
@@ -174,16 +181,20 @@ object CommandHandler {
             Prefs.setLocked(c, false)
             stopAlarmOnly(c)
             try { LockNotifier.cancel(c) } catch (_: Exception) {}
+            // pemilik kembali: matikan juga banner overlay + tutup layar kunci
+            try {
+                Prefs.setOverlay(c, false)
+                c.stopService(Intent(c, OverlayService::class.java))
+            } catch (_: Exception) {}
+            announceUnlock(c)
         } catch (_: Exception) {}
     }
 
     fun stopAll(c: Context) {
         try {
-            Prefs.setLocked(c, false)
+            // stop hanya hentikan suara/senter — kunci tetap bila masih terkunci
             stopAlarmOnly(c)
-            Prefs.setOverlay(c, false)
             try { LockNotifier.cancel(c) } catch (_: Exception) {}
-            try { c.stopService(Intent(c, OverlayService::class.java)) } catch (_: Exception) {}
         } catch (_: Exception) {}
     }
 

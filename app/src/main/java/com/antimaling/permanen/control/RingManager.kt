@@ -13,12 +13,14 @@ import com.antimaling.permanen.util.Prefs
 object RingManager {
     @Volatile private var player: MediaPlayer? = null
     @Volatile private var vibing = false
+    @Volatile private var gen = 0
 
     fun start(c: Context) {
         try {
             Prefs.setRinging(c, true)
             maxVolume(c)
             stopPlayer()
+            val g = ++gen
             val uri = try { RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) }
             catch (_: Exception) { RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE) }
             player = try {
@@ -34,14 +36,17 @@ object RingManager {
                     MediaPlayer.create(c, uri)?.apply { isLooping = true; start() }
                 } catch (_: Exception) { null }
             }
-            startVibrate(c)
+            startVibrate(c, g)
         } catch (_: Exception) {}
     }
 
     fun stop(c: Context) {
         try {
+            gen++ // bunuh SEMUA thread getar dari start() manapun (anti race)
             Prefs.setRinging(c, false)
             vibing = false
+            stopPlayer()
+            try { Thread.sleep(50) } catch (_: Exception) {}
             stopPlayer()
             try {
                 val v = vibrator(c)
@@ -75,14 +80,14 @@ object RingManager {
         else @Suppress("DEPRECATION") c.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
     } catch (_: Exception) { null }
 
-    private fun startVibrate(c: Context) {
+    private fun startVibrate(c: Context, g: Int) {
         try {
             vibing = true
             val v = vibrator(c) ?: return
             if (!v.hasVibrator()) return
             Thread {
                 try {
-                    while (vibing) {
+                    while (vibing && g == gen) {
                         try {
                             if (Build.VERSION.SDK_INT >= 26)
                                 v.vibrate(VibrationEffect.createOneShot(900, VibrationEffect.DEFAULT_AMPLITUDE))

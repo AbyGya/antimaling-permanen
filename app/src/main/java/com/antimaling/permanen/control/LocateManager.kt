@@ -56,6 +56,15 @@ object LocateManager {
         } catch (_: Exception) {}
     }
 
+    /** Hasil khusus panel: link map saja, tanpa embel-embel. */
+    fun link(c: Context): String {
+        return try {
+            val t = lastText(c)
+            val i = t.indexOf("http")
+            if (i >= 0) t.substring(i).trim().split(" ")[0].trim() else t
+        } catch (_: Exception) { "Gagal ambil lokasi." }
+    }
+
     private fun fmt(l: Location): String {
         return try {
             "https://maps.google.com/?q=${l.latitude},${l.longitude} (akurasi ±${l.accuracy.toInt()}m)"
