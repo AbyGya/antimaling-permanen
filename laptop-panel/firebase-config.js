@@ -1,7 +1,7 @@
-// GANTI dengan config dari Firebase Console > Project settings > Your apps (Web):
-// apiKey = Web API Key, projectId = Project ID, authDomain = projectId + ".firebaseapp.com"
+// Project: antimaling-ee82d — tinggal isi apiKey dari
+// Firebase Console > Project settings (ikon gerigi) > General > Web API Key
 export const firebaseConfig = {
   apiKey: "PASTE_API_KEY_DISINI",
-  authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
-  projectId: "PASTE_PROJECT_ID"
+  authDomain: "antimaling-ee82d.firebaseapp.com",
+  projectId: "antimaling-ee82d"
 };
