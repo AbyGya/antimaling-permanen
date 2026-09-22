@@ -19,9 +19,15 @@ import com.antimaling.permanen.util.Prefs
  */
 object LockNotifier {
     const val ID = 103
+    @Volatile private var lastFire = 0L
 
     fun fire(c: Context) {
         try {
+            // throttle: notifikasi full-screen berulang bikin flicker/lag —
+            // cukup 1x per 15 dtk (notif bersifat ongoing, tidak hilang sendiri)
+            val now = System.currentTimeMillis()
+            if (now - lastFire < 15_000) return
+            lastFire = now
             val nm = c.getSystemService(NotificationManager::class.java) ?: return
             try {
                 if (Build.VERSION.SDK_INT >= 26 &&
@@ -57,6 +63,7 @@ object LockNotifier {
     }
 
     fun cancel(c: Context) {
+        lastFire = 0L
         try { c.getSystemService(NotificationManager::class.java)?.cancel(ID) } catch (_: Exception) {}
     }
 }

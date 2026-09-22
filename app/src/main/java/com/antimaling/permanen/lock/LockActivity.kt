@@ -18,6 +18,8 @@ import com.antimaling.permanen.util.Prefs
 
 class LockActivity : AppCompatActivity() {
 
+    private val entered = StringBuilder()
+
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         try {
@@ -35,22 +37,61 @@ class LockActivity : AppCompatActivity() {
             try {
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             } catch (_: Exception) {}
+            // keyboard sistem tidak dipakai (pakai keypad bawaan) — cegah lag IME
+            try { window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN) } catch (_: Exception) {}
         } catch (_: Exception) {}
         setContentView(R.layout.activity_lock)
         try { CommandHandler.onLockShown(this) } catch (_: Exception) {}
         try {
             findViewById<TextView>(R.id.tvLockText)?.text = Prefs.getText(this)
-            findViewById<Button>(R.id.btnUnlock)?.setOnClickListener {
+            // keypad angka bawaan — anti keyboard tidak muncul
+            val keys = mapOf(
+                R.id.btnN1 to "1", R.id.btnN2 to "2", R.id.btnN3 to "3",
+                R.id.btnN4 to "4", R.id.btnN5 to "5", R.id.btnN6 to "6",
+                R.id.btnN7 to "7", R.id.btnN8 to "8", R.id.btnN9 to "9",
+                R.id.btnN0 to "0"
+            )
+            keys.forEach { (id, d) ->
+                findViewById<Button>(id)?.setOnClickListener { press(d) }
+            }
+            findViewById<Button>(R.id.btnDel)?.setOnClickListener {
                 try {
-                    val pin = findViewById<EditText>(R.id.etUnlockPin)?.text?.toString()?.trim() ?: ""
-                    if (pin == Prefs.getPin(this)) {
-                        CommandHandler.unlock(this)
-                        try { Toast.makeText(this, "Dibuka", Toast.LENGTH_SHORT).show() } catch (_: Exception) {}
-                        finish()
-                    } else {
-                        try { Toast.makeText(this, "PIN salah!", Toast.LENGTH_SHORT).show() } catch (_: Exception) {}
-                    }
+                    if (entered.isNotEmpty()) entered.deleteCharAt(entered.length - 1)
+                    renderPin()
                 } catch (_: Exception) {}
+            }
+            findViewById<Button>(R.id.btnClear)?.setOnClickListener {
+                try { entered.clear(); renderPin() } catch (_: Exception) {}
+            }
+            findViewById<Button>(R.id.btnUnlock)?.setOnClickListener { checkPin() }
+        } catch (_: Exception) {}
+    }
+
+    private fun renderPin() {
+        try { findViewById<EditText>(R.id.etUnlockPin)?.setText(entered.toString()) } catch (_: Exception) {}
+    }
+
+    private fun press(d: String) {
+        try {
+            if (entered.length >= 12) return
+            entered.append(d)
+            renderPin()
+            // verifikasi otomatis saat panjang cocok — tanpa tombol
+            val pin = Prefs.getPin(this)
+            if (entered.length == pin.length) checkPin()
+        } catch (_: Exception) {}
+    }
+
+    private fun checkPin() {
+        try {
+            if (entered.toString() == Prefs.getPin(this)) {
+                CommandHandler.unlock(this)
+                try { Toast.makeText(this, "Dibuka", Toast.LENGTH_SHORT).show() } catch (_: Exception) {}
+                finish()
+            } else {
+                try { Toast.makeText(this, "PIN salah!", Toast.LENGTH_SHORT).show() } catch (_: Exception) {}
+                entered.clear()
+                renderPin()
             }
         } catch (_: Exception) {}
     }
