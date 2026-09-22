@@ -1,10 +1,12 @@
 package com.antimaling.permanen.ui
 
+import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -12,6 +14,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -90,6 +93,9 @@ class MainActivity : AppCompatActivity() {
         val etKey = findViewById<EditText>(R.id.etFbKey)
         val etProj = findViewById<EditText>(R.id.etFbProject)
         try {
+            // prefill otomatis agar user tidak perlu mengetik API key
+            if (Prefs.getFbKey(this).isBlank()) Prefs.setFbKey(this, com.antimaling.permanen.util.CloudDefaults.API_KEY)
+            if (Prefs.getFbProject(this).isBlank()) Prefs.setFbProject(this, com.antimaling.permanen.util.CloudDefaults.PROJECT_ID)
             etKey.setText(Prefs.getFbKey(this))
             etProj.setText(Prefs.getFbProject(this))
         } catch (_: Exception) {}
@@ -138,6 +144,36 @@ class MainActivity : AppCompatActivity() {
                 refresh()
             } catch (_: Exception) { toast("Gagal generate") }
         }
+        findViewById<Button>(R.id.btnQrShow)?.setOnClickListener {
+            try {
+                // setup 1 ketuk: pastikan config + kode ada, daftarkan, tampilkan QR
+                if (Prefs.getFbKey(this).isBlank()) Prefs.setFbKey(this, com.antimaling.permanen.util.CloudDefaults.API_KEY)
+                if (Prefs.getFbProject(this).isBlank()) Prefs.setFbProject(this, com.antimaling.permanen.util.CloudDefaults.PROJECT_ID)
+                var pair = Prefs.getPair(this)
+                if (pair.isBlank()) {
+                    pair = (100000..999999).random().toString()
+                    Prefs.setPair(this, pair)
+                }
+                try { etKey.setText(Prefs.getFbKey(this)) } catch (_: Exception) {}
+                try { etProj.setText(Prefs.getFbProject(this)) } catch (_: Exception) {}
+                try { GuardService.start(this) } catch (_: Exception) {}
+                toast("Mendaftarkan ke cloud...")
+                Thread {
+                    try {
+                        if (com.antimaling.permanen.net.FirebaseRest.ensureAuth(this)) {
+                            com.antimaling.permanen.net.FirebaseRest.heartbeat(this, Prefs.getAndroidId(this))
+                        }
+                    } catch (_: Exception) {}
+                    val code = Prefs.getPair(this)
+                    val aid = Prefs.getAndroidId(this)
+                    runOnUiThread {
+                        try { showQr("AM1|$code|$aid", code, aid) } catch (_: Exception) { toast("Gagal buat QR") }
+                        refresh()
+                    }
+                }.apply { isDaemon = true }.start()
+                refresh()
+            } catch (_: Exception) { toast("Gagal") }
+        }
 
         refresh()
     }
@@ -164,7 +200,11 @@ class MainActivity : AppCompatActivity() {
             val overlay = try { Settings.canDrawOverlays(this) } catch (_: Exception) { false }
             val pm = getSystemService(PowerManager::class.java)
             val batt = try { pm?.isIgnoringBatteryOptimizations(packageName) == true } catch (_: Exception) { false }
-            val t = "Status:\n• Admin: ${if (admin) "AKTIF ✅" else "MATI ❌"}\n" +
+            val ver = try {
+                val pi = packageManager.getPackageInfo(packageName, 0)
+                "v${pi.versionName}"
+            } catch (_: Exception) { "" }
+            val t = "Status $ver:\n• Admin: ${if (admin) "AKTIF ✅" else "MATI ❌"}\n" +
                     "• Overlay: ${if (overlay) "OK ✅" else "BELUM ❌"}\n" +
                     "• Battery bebas: ${if (batt) "OK ✅" else "BELUM ❌"}\n" +
                     "• SMS: ${if (Perms.sms(this)) "OK ✅" else "BELUM ❌"} | " +
@@ -180,6 +220,30 @@ class MainActivity : AppCompatActivity() {
                     if (pair.isBlank()) "Kode pairing: -" else "Kode pairing: $pair  (ID: ${Prefs.getAndroidId(this)})"
             } catch (_: Exception) {}
         } catch (_: Exception) {}
+    }
+
+    private fun showQr(text: String, code: String, aid: String) {
+        try {
+            val bmp = qrBitmap(text) ?: run { toast("Gagal buat QR"); return }
+            val iv = ImageView(this).apply { setImageBitmap(bmp); setPadding(32, 32, 32, 32) }
+            AlertDialog.Builder(this)
+                .setTitle("Scan dari panel laptop")
+                .setMessage("Kode: $code   ID: $aid\n\nDi laptop: klik 📷 Scan QR, arahkan kamera ke kode ini.")
+                .setView(iv)
+                .setPositiveButton("Tutup", null)
+                .show()
+        } catch (_: Exception) { toast("Gagal tampilkan QR") }
+    }
+
+    private fun qrBitmap(text: String): Bitmap? {
+        return try {
+            val m = com.google.zxing.qrcode.QRCodeWriter()
+                .encode(text, com.google.zxing.BarcodeFormat.QR_CODE, 512, 512)
+            val bmp = Bitmap.createBitmap(512, 512, Bitmap.Config.RGB_565)
+            for (x in 0 until 512) for (y in 0 until 512)
+                bmp.setPixel(x, y, if (m.get(x, y)) 0xFF000000.toInt() else 0xFFFFFFFF.toInt())
+            bmp
+        } catch (_: Exception) { null }
     }
 
     private fun requestAdmin() {

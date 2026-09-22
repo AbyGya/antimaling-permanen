@@ -126,6 +126,56 @@ $("btnText").onclick = () => { const v = $("customText").value.trim(); if (v) { 
 $("btnUnlock").onclick = () => { const v = $("pinInput").value.trim(); if (v) send("unlock", v); };
 $("btnClear").onclick = () => feed.innerHTML = '<p class="hint">Dibersihkan.</p>';
 
+// ---------- scan QR dari HP ----------
+let scanOn = false, stream = null;
+$("btnScan").onclick = async () => {
+  try {
+    if (typeof globalThis.jsQR !== "function") return alert("Library scan belum termuat (butuh internet sekali).");
+    ensureApp();
+    $("scanBox").classList.remove("hidden");
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+    const v = $("cam");
+    v.srcObject = stream;
+    await v.play();
+    scanOn = true;
+    scanLoop();
+  } catch (e) { alert("Kamera gagal: " + (e.message || e)); }
+};
+$("btnScanStop").onclick = stopScan;
+function stopScan() {
+  scanOn = false;
+  try { stream?.getTracks().forEach(t => t.stop()); } catch {}
+  stream = null;
+  $("scanBox").classList.add("hidden");
+}
+function scanLoop() {
+  if (!scanOn) return;
+  try {
+    const v = $("cam"), c = $("cap");
+    if (v.readyState === v.HAVE_ENOUGH_DATA) {
+      c.width = v.videoWidth; c.height = v.videoHeight;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(v, 0, 0, c.width, c.height);
+      const img = ctx.getImageData(0, 0, c.width, c.height);
+      const res = globalThis.jsQR(img.data, c.width, c.height);
+      if (res?.data) { onQr(res.data); return; }
+    }
+  } catch {}
+  requestAnimationFrame(scanLoop);
+}
+function onQr(data) {
+  // format HP: AM1|pairCode|aid
+  const p = String(data).trim().split("|");
+  stopScan();
+  if (p.length === 3 && p[0] === "AM1") {
+    $("pairCode").value = p[1];
+    toast("QR terbaca ✅ kode " + p[1] + " — menyambungkan…");
+    connectByCode(false);
+  } else {
+    alert("QR tidak dikenal: " + data);
+  }
+}
+
 function toast(m) {
   const div = document.createElement("div");
   div.className = "item"; div.innerHTML = `<p>📤 ${esc(m)}</p>`;

@@ -258,6 +258,12 @@
             android:layout_height="wrap_content"
             android:text="Generate Ulang Kode Pairing" />
 
+        <Button
+            android:id="@+id/btnQrShow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📷 Tampilkan QR Pairing" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

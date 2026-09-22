@@ -35,6 +35,14 @@
       <input id="aidInput" placeholder="atau ID perangkat langsung (lihat di app HP, mis. a1b2c3d4)">
       <button id="btnDirect">Sambung via ID</button>
     </div>
+    <div class="row">
+      <button id="btnScan" class="primary">📷 Scan QR dari HP</button>
+    </div>
+    <div id="scanBox" class="hidden">
+      <video id="cam" playsinline muted></video>
+      <canvas id="cap" class="hidden"></canvas>
+      <p class="hint" id="scanStat">Arahkan kamera ke QR di layar HP… <button id="btnScanStop" class="mini">stop</button></p>
+    </div>
     <p class="hint">Isi <b>firebase-config.js</b> dengan API Key + Project ID Firebase dulu, lalu masukkan kode pairing dari HP.</p>
   </section>
 
@@ -74,6 +82,7 @@
 </main>
 
 <footer><p>HP polling tiap 10 detik • hasil realtime • hanya untuk perangkat milik sendiri</p></footer>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>
