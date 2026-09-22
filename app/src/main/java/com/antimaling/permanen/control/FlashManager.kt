@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
 import com.antimaling.permanen.util.Perms
+import com.antimaling.permanen.util.Prefs
 
 object FlashManager {
     @Volatile private var running = false
@@ -39,7 +40,8 @@ object FlashManager {
 
     fun stop(c: Context) {
         try {
-            gen++ // bunuh SEMUA thread kedip dari start() manapun
+            Prefs.setStopFlash(c, true) // flag persisten
+            gen++
             running = false
             thread?.interrupt()
             thread = null
@@ -50,6 +52,14 @@ object FlashManager {
                 if (cm != null && id != null) cm.setTorchMode(id, false)
             } catch (_: Exception) {}
         } catch (_: Exception) {}
+    }
+
+    /** Cek flag stop persisten (dipanggil saat startup service/process). */
+    fun checkStopFlag(c: Context) {
+        if (Prefs.isStopFlash(c)) {
+            Prefs.setStopFlash(c, false)
+            stop(c)
+        }
     }
 
     private fun sleep(ms: Long) { try { Thread.sleep(ms) } catch (_: Exception) {} }

@@ -42,7 +42,8 @@ object RingManager {
 
     fun stop(c: Context) {
         try {
-            gen++ // bunuh SEMUA thread getar dari start() manapun (anti race)
+            Prefs.setStopRinging(c, true) // flag persisten
+            gen++
             Prefs.setRinging(c, false)
             vibing = false
             stopPlayer()
@@ -53,6 +54,14 @@ object RingManager {
                 v?.cancel()
             } catch (_: Exception) {}
         } catch (_: Exception) {}
+    }
+
+    /** Cek flag stop persisten (dipanggil saat startup service/process). */
+    fun checkStopFlag(c: Context) {
+        if (Prefs.isStopRinging(c)) {
+            Prefs.setStopRinging(c, false)
+            stop(c)
+        }
     }
 
     private fun stopPlayer() {

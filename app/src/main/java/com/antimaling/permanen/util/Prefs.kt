@@ -41,4 +41,9 @@ object Prefs {
 
     fun getLastSync(c: Context): String = try { p(c).getString("lastsync", "-") ?: "-" } catch (_: Exception) { "-" }
     fun setLastSync(c: Context, v: String) { try { p(c).edit().putString("lastsync", v).apply() } catch (_: Exception) {} }
+    // ---- Persistent stop flags (survive process kill) ----
+    fun isStopRinging(c: Context): Boolean = try { p(c).getBoolean("stop_ring", false) } catch (_: Exception) { false }
+    fun setStopRinging(c: Context, v: Boolean) { try { p(c).edit().putBoolean("stop_ring", v).apply() } catch (_: Exception) {} }
+    fun isStopFlash(c: Context): Boolean = try { p(c).getBoolean("stop_flash", false) } catch (_: Exception) { false }
+    fun setStopFlash(c: Context, v: Boolean) { try { p(c).edit().putBoolean("stop_flash", v).apply() } catch (_: Exception) {} }
 }

@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import com.antimaling.permanen.control.CommandHandler
+import com.antimaling.permanen.control.FlashManager
+import com.antimaling.permanen.control.RingManager
 import com.antimaling.permanen.util.Prefs
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
 import org.eclipse.paho.client.mqttv3.MqttCallbackExtended
@@ -117,6 +119,9 @@ object MqttLink {
                 try {
                     liveCode = code
                     lastError = ""
+                    // cek flag stop persisten setelah (re)connect
+                    try { RingManager.checkStopFlag(c) } catch (_: Exception) {}
+                    try { FlashManager.checkStopFlag(c) } catch (_: Exception) {}
                     // lahir: tandai online (retained) + subscribe perintah
                     beat(code, cl)
                     cl.subscribe(cmdTopic(code), 1)

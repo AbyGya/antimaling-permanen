@@ -64,6 +64,41 @@ Lihat juga `tanam-permanen.sh`.
 
 > Batasan jujur Android: tanpa root/device-owner, maling masih bisa uninstall via Safe Mode/Factory Reset. Dengan Device Admin + ikon hidden + SIM alert, pencuri awam umumnya gagal. Proteksi 100% butuh root/system-app atau Device Owner.
 
+## ⚠️ Batasan Jujur: HP Dibunuh OEM (Background Kill)
+
+**Ini bukan bug aplikasi, tapi fitur Android (battery optimization per-OEM).**
+
+| Vendor | Gejala | Solusi User (wajib manual) |
+|--------|--------|---------------------------|
+| **Xiaomi/POCO** | App dimatikan 10-30 menit di background | Security > Battery > AntiMaling > **No restrictions** + App Lock di Recents |
+| **Oppo/Realme/OnePlus** | App dibunuh agresif | Settings > Battery > App Battery Management > AntiMaling > **Allow background** + Lock di Recents |
+| **Vivo/iQOO** | iManager kill background | iManager > Battery > High background power > AntiMaling > **Allow** |
+| **Samsung** | Put to sleep / Deep sleeping | Battery > Background usage limits > **Never sleeping apps** + AntiMaling |
+| **Huawei/Honor** | PowerGenie kill | Battery > App launch > AntiMaling > **Manage manually** > allow all |
+| **Pixel/Stock Android** | Relatif aman | Battery > App info > Battery > **Unrestricted** |
+
+**Yang dilakukan aplikasi (otomatis):**
+- Foreground Service `START_STICKY` + notifikasi permanen
+- BootReceiver (auto-start reboot) + `QUICKBOOT_POWERON`
+- WorkManager periodic 15 menit (KeepAliveWorker)
+- AlarmManager exact 60 detik (restartAlarm) saat service dibunuh
+- MQTT heartbeat tiap 20 detik + auto-reconnect
+- LWT (Last Will Testament) di broker MQTT → status offline akurat
+- Persistent stop flags di SharedPreferences (survive process kill)
+
+**Yang TIDAK bisa diatasi aplikasi (harus user manual):**
+- **Force Stop via Settings** → semua process dimatikan paksa oleh sistem (tidak ada app yang kebal)
+- **Factory Reset / Safe Mode** → data hilang, app terhapus
+- **OEM killer agresif** meski sudah "unrestricted" → beberapa vendor tetap kill setelah beberapa jam
+
+**Solusi 100% (hanya 2 cara):**
+1. **Device Owner** (ADB `dpm set-device-owner`) — **wajib HP fresh reset, belum ada akun Google**
+2. **Root / Magisk** → install sebagai system app atau gunakan tool seperti `LSPosed` + `AppOpsX`
+
+**Tanpa keduanya di atas, tidak ada aplikasi anti-maling yang 100% kebal dari OEM kill.** Jika HP dicuri dan dicabut baterai/dimatiin paksa → app mati. Fitur SIM-change alert akan kirim SMS ke nomor trusted saat maling ganti kartu.
+
+---
+
 ## 4. Anti-FC / No-fungsi dicegah dengan
 - minSdk 26, target 34, XML Views (tanpa Compose), deps hanya AndroidX stabil
 - Setiap receiver/service/activity = try-catch, cek izin runtime, cek null, cek API level

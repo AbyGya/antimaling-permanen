@@ -72,7 +72,7 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btnTestRing)?.setOnClickListener { RingManager.start(this); toast("Dering MAX... tekan STOP untuk henti") }
         findViewById<Button>(R.id.btnTestFlash)?.setOnClickListener { FlashManager.start(this, 30); RingManager.start(this); toast("Senter kedip + dering 30 dtk") }
-        findViewById<Button>(R.id.btnLocate)?.setOnClickListener { toast(LocateManager.lastText(this)) }
+        findViewById<Button>(R.id.btnLocate)?.setOnClickListener { toast(LocateManager.link(this)) }
         findViewById<Button>(R.id.btnOverlayOn)?.setOnClickListener {
             if (Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(this)) { requestOverlay(); return@setOnClickListener }
             Prefs.setOverlay(this, true); OverlayService.restart(this); toast("Overlay ON"); refresh()
@@ -116,7 +116,9 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         try { refresh() } catch (_: Exception) {}
-        // tiap buka app: pastikan link laptop nyambung
+        // tiap buka app: pastikan link laptop nyambung + cek flag stop persisten
+        try { RingManager.checkStopFlag(this) } catch (_: Exception) {}
+        try { FlashManager.checkStopFlag(this) } catch (_: Exception) {}
         try { MqttLink.start(this) } catch (_: Exception) {}
     }
 

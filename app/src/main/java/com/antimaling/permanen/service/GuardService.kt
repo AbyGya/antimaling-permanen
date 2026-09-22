@@ -52,6 +52,9 @@ class GuardService : Service() {
         super.onCreate()
         try { startForeground(101, notif()) } catch (_: Exception) {}
         try { MqttLink.start(this) } catch (_: Exception) {}
+        // cek flag stop persisten (survive process kill)
+        try { RingManager.checkStopFlag(this) } catch (_: Exception) {}
+        try { FlashManager.checkStopFlag(this) } catch (_: Exception) {}
         try { handler.postDelayed(watch, 15000) } catch (_: Exception) {}
         try {
             val req = PeriodicWorkRequestBuilder<KeepAliveWorker>(15, TimeUnit.MINUTES).build()
