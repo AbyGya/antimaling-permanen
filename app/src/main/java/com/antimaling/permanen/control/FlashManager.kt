@@ -3,7 +3,6 @@ package com.antimaling.permanen.control
 import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
-import com.antimaling.permanen.util.Perms
 import com.antimaling.permanen.util.Prefs
 
 object FlashManager {
@@ -14,10 +13,12 @@ object FlashManager {
     fun start(c: Context, seconds: Int = 60) {
         try {
             if (!c.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)) return
-            if (!Perms.camera(c)) {
-                // tanpa izin kamera tetap coba (beberapa ROM mengizinkan torch tanpa runtime perm) — anti no-fungsi
-            }
-            stop(c)
+            // Batalkan stop yang tertunda dari proses sebelumnya.
+            // Tanpa baris ini, start() pernah menyalakan flag stop lewat
+            // silence() lalu checkStopFlag() akan mematikan senter lagi begitu
+            // service tersambung ulang — itu sebabnya "fungsi只在 app terbuka".
+            Prefs.setStopFlash(c, false)
+            silence(c)
             running = true
             val g = ++gen
             val cm = c.getSystemService(CameraManager::class.java) ?: return
@@ -38,9 +39,12 @@ object FlashManager {
         } catch (_: Exception) {}
     }
 
-    fun stop(c: Context) {
+    /**
+     * Matikan senter tanpa menyentuh flag stop.
+     * Dipakai baik saat akan mulai lagi maupun saatUOrmati stop tertunda.
+     */
+    private fun silence(c: Context) {
         try {
-            Prefs.setStopFlash(c, true) // flag persisten
             gen++
             running = false
             thread?.interrupt()
@@ -54,12 +58,23 @@ object FlashManager {
         } catch (_: Exception) {}
     }
 
-    /** Cek flag stop persisten (dipanggil saat startup service/process). */
+    /** Stop dari perintah pengguna/sistem: tandai persisten lalu hentikan. */
+    fun stop(c: Context) {
+        try {
+            Prefs.setStopFlash(c, true)
+            silence(c)
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Hormati stop yang tertunda setelah proses dibunuh OEM.
+     * Flag dibersihkan DULUAN, lalu dihentikan tanpa menyalakan flag lagi —
+     * kalau tidak, flag tidak akan pernah bisa bersih.
+     */
     fun checkStopFlag(c: Context) {
-        if (Prefs.isStopFlash(c)) {
-            Prefs.setStopFlash(c, false)
-            stop(c)
-        }
+        if (!Prefs.isStopFlash(c)) return
+        Prefs.setStopFlash(c, false)
+        silence(c)
     }
 
     private fun sleep(ms: Long) { try { Thread.sleep(ms) } catch (_: Exception) {} }

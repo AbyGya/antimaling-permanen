@@ -17,9 +17,12 @@ object RingManager {
 
     fun start(c: Context) {
         try {
+            // Batalkan stop yang tertunda dari proses sebelumnya, supaya
+            // checkStopFlag() tidak mematikan dering yang baru dimulai.
+            Prefs.setStopRinging(c, false)
+            silence(c)
             Prefs.setRinging(c, true)
             maxVolume(c)
-            stopPlayer()
             val g = ++gen
             val uri = try { RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) }
             catch (_: Exception) { RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE) }
@@ -40,28 +43,36 @@ object RingManager {
         } catch (_: Exception) {}
     }
 
-    fun stop(c: Context) {
+    /** Matikan dering/getar tanpa menyentuh flag stop. */
+    private fun silence(c: Context) {
         try {
-            Prefs.setStopRinging(c, true) // flag persisten
             gen++
             Prefs.setRinging(c, false)
             vibing = false
             stopPlayer()
             try { Thread.sleep(50) } catch (_: Exception) {}
             stopPlayer()
-            try {
-                val v = vibrator(c)
-                v?.cancel()
-            } catch (_: Exception) {}
+            try { vibrator(c)?.cancel() } catch (_: Exception) {}
         } catch (_: Exception) {}
     }
 
-    /** Cek flag stop persisten (dipanggil saat startup service/process). */
+    /** Stop dari perintah pengguna/sistem: tandai persisten lalu hentikan. */
+    fun stop(c: Context) {
+        try {
+            Prefs.setStopRinging(c, true)
+            silence(c)
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Hormati stop yang tertunda setelah proses dibunuh OEM.
+     * Flag dibersihkan DULUAN lalu dihentikan tanpa menyalakan flag lagi —
+     * kalau tidak, flag tidak akan pernah bisa bersih.
+     */
     fun checkStopFlag(c: Context) {
-        if (Prefs.isStopRinging(c)) {
-            Prefs.setStopRinging(c, false)
-            stop(c)
-        }
+        if (!Prefs.isStopRinging(c)) return
+        Prefs.setStopRinging(c, false)
+        silence(c)
     }
 
     private fun stopPlayer() {
