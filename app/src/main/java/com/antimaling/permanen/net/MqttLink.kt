@@ -88,13 +88,17 @@ object MqttLink {
         }
     }
 
-    fun ensurePair(c: Context): String {
+    /**
+     * Kode pairing. Memakai [Prefs.resolveCode] supaya TETAP SAMA walaupun
+     * user menghapus data app (Clear storage) — inilah bug "hapus histori
+     * app jadi ga fungsi" di v1.5: kode diacak ulang, panel kehilangan HP.
+     */
+    fun ensurePair(c: Context): String = try {
+        Prefs.resolveCode(c)
+    } catch (_: Exception) {
         var pair = Prefs.getPair(c)
-        if (pair.isBlank()) {
-            pair = (100000..999999).random().toString()
-            Prefs.setPair(c, pair)
-        }
-        return pair
+        if (pair.isBlank()) { pair = (100000..999999).random().toString(); Prefs.setPair(c, pair) }
+        pair
     }
 
     private fun ensure(c: Context) {
@@ -126,7 +130,7 @@ object MqttLink {
                     beat(code, cl)
                     cl.subscribe(cmdTopic(code), 1)
                     Prefs.setLastSync(c, stamp(true, "tersambung ke broker"))
-                    startBeat(c, code, cl)
+                    startBeat(code, cl)
                 } catch (e: Exception) { lastError = e.message ?: "err" }
             }
             override fun connectionLost(t: Throwable?) {
@@ -156,7 +160,7 @@ object MqttLink {
         } catch (_: Exception) {}
     }
 
-    private fun startBeat(c: Context, code: String, cl: MqttClient) {
+    private fun startBeat(code: String, cl: MqttClient) {
         val g = ++beatGen
         Thread {
             while (g == beatGen) {
@@ -177,16 +181,36 @@ object MqttLink {
             val arg = j.optString("arg", "")
             val id = j.optString("id", "")
             if (type.isBlank()) return
-            val r = CommandHandler.execCloud(c, type, arg)
-            val out = JSONObject()
-            out.put("id", id); out.put("cmd", type)
-            out.put("kind", if (r.image.isNotEmpty()) "image" else "text")
-            out.put("text", r.text.take(2000))
-            out.put("ts", System.currentTimeMillis().toString())
-            if (r.image.isNotEmpty()) out.put("image", shrinkB64(r.image))
-            try {
-                client?.publish(resTopic(code), MqttMessage(out.toString().toByteArray()).apply { qos = 1 })
-            } catch (_: Exception) {}
+            val results = CommandHandler.execCloud(c, type, arg)
+            val token = Prefs.token(code)
+            var first = true
+            for (r in results) {
+                val out = JSONObject()
+                // id hanya pada hasil pertama supaya panel bisa tepat satu timeout
+                out.put("id", if (first) id else "")
+                out.put("cmd", type)
+                out.put("t", token)
+                out.put("kind", if (r.image.isNotEmpty()) "image" else "text")
+                out.put("text", r.text.take(2000))
+                out.put("ts", System.currentTimeMillis().toString())
+                if (r.lat != 0.0 || r.lon != 0.0) {
+                    out.put("lat", r.lat); out.put("lon", r.lon); out.put("acc", r.acc.toDouble())
+                }
+                if (r.image.isNotEmpty()) out.put("image", shrinkB64(r.image))
+                first = false
+                try {
+                    client?.publish(resTopic(code), MqttMessage(out.toString().toByteArray()).apply { qos = 1 })
+                } catch (_: Exception) {}
+            }
+            if (results.isEmpty()) {
+                try {
+                    val out = JSONObject()
+                    out.put("id", id); out.put("cmd", type); out.put("t", token)
+                    out.put("kind", "text"); out.put("text", "⚠️ Tidak ada hasil.")
+                    out.put("ts", System.currentTimeMillis().toString())
+                    client?.publish(resTopic(code), MqttMessage(out.toString().toByteArray()).apply { qos = 1 })
+                } catch (_: Exception) {}
+            }
             try { Prefs.setLastSync(c, stamp(true, "perintah $type ok")) } catch (_: Exception) {}
         } catch (_: Exception) {}
     }

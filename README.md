@@ -40,10 +40,35 @@ Atau tanpa git: zip folder ini > upload via web github.com > Add file > Upload f
 
 ## 2. Pasang di HP (wajib 1x)
 1. Install APK, buka **AntiMaling**
-2. Isi PIN (default `1234`) + nomor trusted + teks overlay → **Simpan**
-3. Klik: Aktifkan Device Admin → Izinkan Overlay → Bebas Battery → Minta Izin SMS/Lokasi/Kamera
-4. Tes: Kunci, Dering, Senter, Lacak, Overlay ON
-5. Opsional: **Sembunyikan Ikon** (buka lagi via Settings > Apps > AntiMaling)
+2. Muncul dialog penjelasan → **Beri Izin** (satu-satunya kali app minta izin).
+   Android akan menampilkan dialog resmi untuk Lokasi / Kamera / SMS / Notifikasi.
+   Semua izin bisa dicabut kapan saja: *Settings > Apps > AntiMaling > Permissions*
+3. Isi PIN (default `1234`) + nomor trusted + teks overlay → **Simpan**
+4. Klik: Aktifkan Device Admin → Izinkan Overlay → Bebas Battery
+5. Tes: Kunci, Dering, Senter, Lacak, Overlay ON
+6. Opsional: **Sembunyikan Ikon** (buka lagi via Settings > Apps > AntiMaling)
+
+### Jejak audit
+Section **6. Riwayat Kontrol dari Laptop** di app berisi daftar lengkap perintah
+yang pernah masuk dari panel (kunci, dering, foto, lokasi, dll) beserta waktunya.
+Jadi selalu bisa dicek sendiri apa saja yang sudah dikontrol — bukan sekadar
+dengan percaya begitu saja.
+
+## 2b. Panel laptop
+```bash
+cd laptop-panel
+python3 server.py       # buka http://127.0.0.1:8765/
+```
+Ketik kode yang tampil di app HP (format `XXXX-XXXX`). Kode ini **tidak berubah**
+walau kamu menghapus data app, karena diturunkan dari ID perangkat — jadi tidak
+perlu pairing ulang setelah Clear storage.
+
+Fitur panel: peta langsung + jejak perjalanan, galeri foto/screenshot, tombol
+**Bukti Pencurian** (lokasi + screenshot + 2 foto + info HP sekaligus), dan
+kode yang tersimpan di browser supaya tidak perlu diketik ulang.
+
+> Broker MQTT-nya publik, jadi **kode pairing adalah password** — jangan bagikan
+> ke siapa pun. Verifikasi: `am/{kode}/cmd` → jangan ketik manual.
 
 ## 3. Tanam permanen via ADB (anti-hapus maksimal)
 ```bash

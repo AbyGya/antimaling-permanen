@@ -14,6 +14,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.antimaling.permanen.R
@@ -62,9 +63,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnAdmin)?.setOnClickListener { requestAdmin() }
         findViewById<Button>(R.id.btnOverlayPerm)?.setOnClickListener { requestOverlay() }
         findViewById<Button>(R.id.btnBattery)?.setOnClickListener { requestBattery() }
-        findViewById<Button>(R.id.btnPerms)?.setOnClickListener {
-            try { ActivityCompat.requestPermissions(this, Perms.needed(), 11) } catch (_: Exception) {}
-        }
+        findViewById<Button>(R.id.btnPerms)?.setOnClickListener { askPermissions() }
 
         findViewById<Button>(R.id.btnTestLock)?.setOnClickListener {
             CommandHandler.lock(this)
@@ -83,6 +82,9 @@ class MainActivity : AppCompatActivity() {
             toast("Overlay OFF"); refresh()
         }
         findViewById<Button>(R.id.btnStopAll)?.setOnClickListener { CommandHandler.stopAll(this); toast("Semua alarm STOP"); refresh() }
+        findViewById<Button>(R.id.btnClearAudit)?.setOnClickListener {
+            try { Prefs.putStr(this, "audit", ""); toast("Riwayat dibersihkan"); refresh() } catch (_: Exception) {}
+        }
         findViewById<Button>(R.id.btnHideIcon)?.setOnClickListener { setIcon(false) }
         findViewById<Button>(R.id.btnShowIcon)?.setOnClickListener { setIcon(true) }
 
@@ -102,15 +104,78 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btnPairNew)?.setOnClickListener {
             try {
-                val pair = (100000..999999).random().toString()
-                Prefs.setPair(this, pair)
+                // kode override manual (8 karakter). Kalau dikosongkan -> kembali
+                // ke kode stabil otomatis yang diturunkan dari ID perangkat.
+                val fresh = com.antimaling.permanen.util.CodeGen.random()
+                Prefs.setPair(this, fresh)
                 MqttLink.reconnect(this)
-                toast("Kode baru: $pair — ketik di panel laptop")
+                toast("Kode baru: $fresh — ketik di panel laptop")
                 refresh()
             } catch (_: Exception) { toast("Gagal ganti kode") }
         }
 
+        // ---- Izin Android: diminta sekali, saat pertama kali app dibuka ----
+        firstRunPermissions()
+
         refresh()
+    }
+
+    /**
+     * Saat pertama dijalankan setelah install: jelaskan dulu apa yang dibutuhkan,
+     * lalu system dialog Android muncul. Ini satu-satunya saat app meminta izin —
+     * sesudahnya pemilik yang pegang kendali, dan bisa mencabut kapan saja di
+     * Settings > Apps > AntiMaling > Permissions.
+     */
+    private fun firstRunPermissions() {
+        try {
+            if (Prefs.getBool(this, "first_run_done", false)) return
+            Prefs.putBool(this, "first_run_done", true)
+            val missing = Perms.needed().filter { !Perms.has(this, it) }
+            if (missing.isEmpty()) return
+
+            AlertDialog.Builder(this)
+                .setTitle("Izin yang dibutuhkan")
+                .setMessage(
+                    "AntiMaling perlu izin berikut agar proteksi bisa bekerja:\n\n" +
+                        "📍 Lokasi — melacak HP kalau dicuri\n" +
+                        "📷 Kamera — bukti foto pencuri\n" +
+                        "📨 SMS — peringatan kalau SIM diganti, & remote via SMS\n" +
+                        "🔔 Notifikasi — status proteksi & alarm\n\n" +
+                        "Semua izin bisa kamu cabut kapan saja di:\n" +
+                        "Settings > Apps > AntiMaling > Permissions"
+                )
+                .setPositiveButton("Beri Izin") { _, _ -> askPermissions() }
+                .setNegativeButton("Nanti", null)
+                .show()
+        } catch (_: Exception) {}
+    }
+
+    private fun askPermissions() {
+        try { ActivityCompat.requestPermissions(this, Perms.needed(), 11) } catch (_: Exception) {}
+    }
+
+    /** Kalau ada yang ditolak permanen, arahkan ke Settings (Android tak izinkan minta ulang). */
+    private fun explainMissing() {
+        try {
+            val miss = Perms.needed().filter { !Perms.has(this, it) }
+            if (miss.isEmpty()) return
+            AlertDialog.Builder(this)
+                .setTitle("Sebagian izin belum diberikan")
+                .setMessage(
+                    "Masih ada ${miss.size} izin yang kosong.\n\n" +
+                        "Kalau tombol \"Allow\" tidak muncul, buka manual:\n" +
+                        "Settings > Apps > AntiMaling > Permissions\n\n" +
+                        "Tanpa izin lokasi/kamera, fitur bukti & lacak tidak akan bekerja."
+                )
+                .setPositiveButton("Buka Settings") { _, _ ->
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$packageName")))
+                    } catch (_: Exception) {}
+                }
+                .setNegativeButton("Tutup", null)
+                .show()
+        } catch (_: Exception) {}
     }
 
     override fun onResume() {
@@ -145,12 +210,20 @@ class MainActivity : AppCompatActivity() {
                     "• Terkunci: ${if (Prefs.isLocked(this)) "YA 🔒" else "tidak"} | Dering: ${if (Prefs.isRinging(this)) "YA 🔊" else "tidak"}"
             findViewById<TextView>(R.id.tvStatus)?.text = t
             try {
-                val pair = Prefs.getPair(this)
+                val pair = Prefs.resolveCode(this)
                 findViewById<TextView>(R.id.tvPair)?.text =
-                    if (pair.isBlank()) "••••••" else pair.chunked(3).joinToString(" ")
+                    if (pair.isBlank()) "••••-••••" else pair.chunked(4).joinToString("-")
                 val link = if (MqttLink.connected()) "Link laptop: ONLINE ✅ — ketik kode di atas pada panel"
                 else "Link laptop: menghubungkan... (${Prefs.getLastSync(this)})"
                 findViewById<TextView>(R.id.tvMqtt)?.text = link
+            } catch (_: Exception) {}
+
+            // riwayat perintah dari panel
+            try {
+                val log = Prefs.auditLog(this).take(12)
+                findViewById<TextView>(R.id.tvAudit)?.text =
+                    if (log.isEmpty()) "Belum ada perintah dari panel."
+                    else log.joinToString("\n")
             } catch (_: Exception) {}
         } catch (_: Exception) {}
     }
@@ -207,6 +280,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(rc: Int, p: Array<out String>, r: IntArray) {
         super.onRequestPermissionsResult(rc, p, r)
+        try {
+            if (rc == 11) {
+                val denied = r.count { it != PackageManager.PERMISSION_GRANTED }
+                if (denied > 0) explainMissing()
+            }
+        } catch (_: Exception) {}
         refresh()
     }
 

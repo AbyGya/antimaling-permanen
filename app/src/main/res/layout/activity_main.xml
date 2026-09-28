@@ -246,6 +246,41 @@
             android:text="Ganti Kode Baru" />
 
         <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="6. Riwayat Kontrol dari Laptop"
+            android:textColor="@color/text"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Semua perintah yang pernah datang dari panel laptop dicatat di sini, supaya kamu bisa tahu persis apa yang sudah dikontrol."
+            android:textColor="@color/muted"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tvAudit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@color/card"
+            android:fontFamily="monospace"
+            android:padding="12dp"
+            android:text="Belum ada perintah dari panel."
+            android:textColor="@color/muted"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/btnClearAudit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Bersihkan Riwayat" />
+
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"

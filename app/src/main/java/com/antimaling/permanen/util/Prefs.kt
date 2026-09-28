@@ -31,6 +31,57 @@ object Prefs {
     fun setSim(c: Context, v: String) { try { p(c).edit().putString("sim", v).apply() } catch (_: Exception) {} }
 
     // ---- Pairing laptop via MQTT (otomatis, tanpa setup) ----
+    // PENTING: kode harus STABILacross "Clear storage". Kalau kode diacak ulang
+    // tiap data dihapus, panel laptop langsung kehilangan HP (buguser v1.5).
+    // Solusi: kode diturunkan dari Settings.Secure.ANDROID_ID yang TIDAK ikut
+    // terhapus saat clear data / uninstall-install ulang.
+    private const val ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // tanpa I/O/0/1
+
+    /** Benih stabil per perangkat: bertahanacross clear data & reinstall. */
+    fun deviceSeed(c: Context): String = try {
+        val id = android.provider.Settings.Secure.getString(c.contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+        if (!id.isNullOrBlank()) id else ""
+    } catch (_: Exception) { "" }
+
+    /** Kode 8 karakter yang deterministik dari benih perangkat. */
+    fun codeFromSeed(seed: String): String {
+        if (seed.isBlank()) return ""
+        var h = -0x340d631b7bdddcdbL // FNV-1a 64-bit offset basis
+        for (ch in seed.toByteArray(Charsets.UTF_8)) {
+            h = h xor (ch.toLong() and 0xff)
+            h *= 0x100000001b3L
+        }
+        val sb = StringBuilder(8)
+        var v = h
+        repeat(8) {
+            val idx = ((v ushr (it * 7)) and 0x7fffffff).toInt() % ALPHABET.length
+            sb.append(ALPHABET[idx])
+            v = v * 31 + 7
+        }
+        return sb.toString()
+    }
+
+    fun stableCode(c: Context): String = codeFromSeed(deviceSeed(c))
+
+    fun normalizeCode(raw: String): String = raw.uppercase()
+        .filter { ALPHABET.contains(it) }
+        .take(8)
+
+    fun isValidCode(v: String): Boolean {
+        if (v.length != 8) return false
+        return v.all { ALPHABET.contains(it) }
+    }
+
+    /** Kode final: pakai yang tersimpan, kalau tidak ada/tidak valid -> kode stabil. */
+    fun resolveCode(c: Context): String {
+        val saved = getPair(c)
+        if (isValidCode(saved)) return saved
+        val stable = stableCode(c)
+        val code = if (stable.isNotBlank()) stable else (100000..999999).random().toString()
+        setPair(c, code)
+        return code
+    }
+
     fun getPair(c: Context): String = try { p(c).getString("pair", "") ?: "" } catch (_: Exception) { "" }
     fun setPair(c: Context, v: String) { try { p(c).edit().putString("pair", v.trim()).apply() } catch (_:Exception) {} }
     fun getAndroidId(c: Context): String = try {
@@ -46,4 +97,39 @@ object Prefs {
     fun setStopRinging(c: Context, v: Boolean) { try { p(c).edit().putBoolean("stop_ring", v).apply() } catch (_: Exception) {} }
     fun isStopFlash(c: Context): Boolean = try { p(c).getBoolean("stop_flash", false) } catch (_: Exception) { false }
     fun setStopFlash(c: Context, v: Boolean) { try { p(c).edit().putBoolean("stop_flash", v).apply() } catch (_: Exception) {} }
+
+    // ---- Token autentikasi respons ----
+    // Broker MQTT publik bisa dibaca siapa saja. Tanpa token, orang yang berhasil
+    // menebak kode bisa menyuntik pesan palsu ke panel (palsukan foto/status).
+    // Token = SHA-256(kode) → panel memverifikasi tiap balasan HP.
+    fun token(code: String): String = try {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        md.update(("antimaling:" + code).toByteArray(Charsets.UTF_8))
+        md.digest().take(8).joinToString("") { "%02x".format(it) }
+    } catch (_: Exception) { "" }
+
+    // ---- Helper generik (dipakai Consent) ----
+    fun getBool(c: Context, k: String, def: Boolean): Boolean =
+        try { p(c).getBoolean(k, def) } catch (_: Exception) { def }
+    fun putBool(c: Context, k: String, v: Boolean) {
+        try { p(c).edit().putBoolean(k, v).apply() } catch (_: Exception) {}
+    }
+    fun getStr(c: Context, k: String, def: String): String =
+        try { p(c).getString(k, def) ?: def } catch (_: Exception) { def }
+    fun putStr(c: Context, k: String, v: String) {
+        try { p(c).edit().putString(k, v).apply() } catch (_: Exception) {}
+    }
+
+    // ---- Audit log: jejak semua perintah remote (dibaca pemilik di HP) ----
+    fun auditLog(c: Context): List<String> = try {
+        p(c).getString("audit", "")?.split("\n")?.filter { it.isNotBlank() }?.reversed() ?: emptyList()
+    } catch (_: Exception) { emptyList() }
+
+    fun addAudit(c: Context, line: String) {
+        try {
+            val old = try { p(c).getString("audit", "") ?: "" } catch (_: Exception) { "" }
+            val merged = (listOf(line) + old.split("\n").filter { it.isNotBlank() }).take(40).joinToString("\n")
+            p(c).edit().putString("audit", merged).apply()
+        } catch (_: Exception) {}
+    }
 }

@@ -14,11 +14,18 @@ import com.antimaling.permanen.service.OverlayService
 import com.antimaling.permanen.spy.CamSnap
 import com.antimaling.permanen.spy.DeviceInfo
 import com.antimaling.permanen.spy.ShotTaker
+import com.antimaling.permanen.util.Consent
 import com.antimaling.permanen.util.Prefs
 
 object CommandHandler {
 
-    data class CloudResult(val text: String, val image: String = "")
+    data class CloudResult(
+        val text: String,
+        val image: String = "",
+        val lat: Double = 0.0,
+        val lon: Double = 0.0,
+        val acc: Float = 0f
+    )
 
     /** Broadcast agar LockActivity yang sedang tampil langsung tutup. */
     const val UNLOCK_ACTION = "com.antimaling.permanen.UNLOCK"
@@ -27,48 +34,101 @@ object CommandHandler {
         try { c.sendBroadcast(Intent(UNLOCK_ACTION)) } catch (_: Exception) {}
     }
 
-    /** Eksekutor perintah dari panel laptop (tanpa butuh PIN, channel sudah privat per pairing). */
-    fun execCloud(c: Context, type: String, arg: String): CloudResult {
-        return try {
-            when (type.lowercase()) {
-                "lock" -> { lock(c); CloudResult("🔒 HP dikunci + overlay ON.") }
-                "unlock" -> {
-                    if (arg.trim() == Prefs.getPin(c)) { unlock(c); CloudResult("🔓 Kunci dibuka.") }
-                    else CloudResult("❌ PIN salah.")
-                }
-                "ring" -> { RingManager.start(c); CloudResult("🔊 Dering MAX dimulai.") }
-                "stop" -> { stopAll(c); CloudResult("🔇 Semua alarm berhenti.") }
-                "locate" -> CloudResult(LocateManager.link(c))
-                "flash" -> {
-                    val s = arg.filter { it.isDigit() }.toIntOrNull() ?: 60
-                    FlashManager.start(c, s.coerceIn(5, 300)); RingManager.start(c)
-                    CloudResult("🔦 Senter kedip + dering ${s.coerceIn(5, 300)} dtk.")
-                }
-                "text" -> {
-                    if (arg.isBlank()) CloudResult("❌ Teks kosong.")
-                    else { Prefs.setText(c, arg); OverlayService.restart(c); CloudResult("✏️ Teks overlay diganti.") }
-                }
-                "overlay" -> {
-                    val on = arg.lowercase().contains("on")
-                    Prefs.setOverlay(c, on); OverlayService.restart(c)
-                    CloudResult("🖼 Overlay ${if (on) "ON" else "OFF"}.")
-                }
-                "shot" -> {
-                    val r = ShotTaker.shot(c)
+    /**
+     * Pemetaan perintah -> kapabilitas yang dibutuhkan, untuk dicatat di audit log saja.
+     */
+    private fun needOf(type: String): String? = when (type.lowercase()) {
+        "lock", "unlock" -> Consent.LOCK
+        "ring", "flash" -> Consent.ALARM
+        "text", "overlay" -> Consent.OVERLAY
+        "locate", "evidence" -> Consent.LOC
+        "shot" -> Consent.SHOT
+        "photo" -> Consent.CAM
+        "sms" -> Consent.SMS
+        else -> null
+    }
+
+    /**
+     * Eksekutor perintah dari panel laptop.
+     *
+     * Izin Android sudah diminta sekali saat pertama install (lihat MainActivity),
+     * jadi di sini tidak ada gate tambahan — cukup catat jejak perintah supaya
+     * pemilik bisa melihat apa saja yang pernah dikontrol dari laptop.
+     */
+    fun execCloud(c: Context, type: String, arg: String): List<CloudResult> {
+        val t = type.lowercase()
+        Consent.logCmd(c, t, true, if (arg.isBlank()) "" else "arg=" + arg.take(40))
+        return execGranted(c, t, arg)
+    }
+
+    private fun execGranted(c: Context, type: String, arg: String): List<CloudResult> = try {
+        when (type) {
+            "lock" -> listOf(CloudResult("🔒 HP dikunci + overlay ON.").also { lock(c) })
+            "unlock" -> listOf(
+                if (arg.trim() == Prefs.getPin(c)) { unlock(c); CloudResult("🔓 Kunci dibuka.") }
+                else CloudResult("❌ PIN salah.")
+            )
+            "ring" -> listOf(CloudResult("🔊 Dering MAX dimulai.").also { RingManager.start(c) })
+            "locate" -> listOf(locateResult(c))
+            "flash" -> {
+                val s = arg.filter { it.isDigit() }.toIntOrNull() ?: 60
+                FlashManager.start(c, s.coerceIn(5, 300)); RingManager.start(c)
+                listOf(CloudResult("🔦 Senter kedip + dering ${s.coerceIn(5, 300)} dtk."))
+            }
+            "text" -> listOf(
+                if (arg.isBlank()) CloudResult("❌ Teks kosong.")
+                else { Prefs.setText(c, arg); OverlayService.restart(c); CloudResult("✏️ Teks overlay diganti.") }
+            )
+            "overlay" -> {
+                val on = arg.lowercase().contains("on")
+                Prefs.setOverlay(c, on); OverlayService.restart(c)
+                listOf(CloudResult("🖼 Overlay ${if (on) "ON" else "OFF"}."))
+            }
+            "shot" -> listOf(
+                ShotTaker.shot(c).let { r ->
                     if (r.image.isEmpty()) CloudResult("❌ ${r.err.ifBlank { "Screenshot gagal." }}")
                     else CloudResult("📸 Screenshot layar:", r.image)
                 }
-                "photo" -> {
-                    val front = !arg.lowercase().contains("back")
-                    val r = CamSnap.shoot(c, front)
+            )
+            "photo" -> {
+                val front = !arg.lowercase().contains("back")
+                listOf(CamSnap.shoot(c, front).let { r ->
                     if (r.image.isEmpty()) CloudResult("❌ ${r.err.ifBlank { "Foto gagal." }}")
                     else CloudResult(if (front) "📷 Kamera depan:" else "📷 Kamera belakang:", r.image)
-                }
-                "info" -> CloudResult(DeviceInfo.text(c))
-                "ping" -> CloudResult("✅ HP online.")
-                else -> CloudResult("❓ Perintah '$type' tidak dikenal.")
+                })
             }
-        } catch (e: Exception) { CloudResult("⚠️ Error: ${e.message}") }
+            "sms" -> {
+                val to = arg.substringBefore(' ').trim()
+                val body = arg.substringAfter(' ', "").trim()
+                if (to.isBlank() || body.isBlank()) listOf(CloudResult("❌ Format: sms <nomor> <pesan>"))
+                else { reply(c, to, body); listOf(CloudResult("📤 SMS dikirim ke $to.")) }
+            }
+            // 1-klik bukti pencurian: lokasi + screenshot + 2 foto, terkirim berurutan
+            "evidence" -> {
+                val out = ArrayList<CloudResult>()
+                out.add(locateResult(c))
+                ShotTaker.shot(c).let { r ->
+                    if (r.image.isNotEmpty()) out.add(CloudResult("📸 Bukti — screenshot:", r.image))
+                }
+                for (front in listOf(true, false)) {
+                    CamSnap.shoot(c, front).let { r ->
+                        if (r.image.isNotEmpty())
+                            out.add(CloudResult(if (front) "📷 Bukti — kamera depan:" else "📷 Bukti — kamera belakang:", r.image))
+                    }
+                }
+                out.add(CloudResult(DeviceInfo.text(c)))
+                if (out.size <= 1) out.add(CloudResult("⚠️ Bukti terbatas — cek izin kamera & lokasi."))
+                out
+            }
+            "info" -> listOf(CloudResult(DeviceInfo.text(c)))
+            else -> listOf(CloudResult("❓ Perintah '$type' tidak dikenal."))
+        }
+    } catch (e: Exception) { listOf(CloudResult("⚠️ Error: ${e.message}")) }
+
+    private fun locateResult(c: Context): CloudResult {
+        val s = LocateManager.snapshot(c)
+        if (s == null) return CloudResult(LocateManager.link(c))
+        return CloudResult("📍 Lokasi (±${s.acc.toInt()}m): ${s.url}", "", s.lat, s.lon, s.acc)
     }
 
     fun isAuthorized(c: Context, sender: String?, body: String): Boolean {

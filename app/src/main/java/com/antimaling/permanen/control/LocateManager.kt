@@ -86,4 +86,43 @@ object LocateManager {
             "https://maps.google.com/?q=${l.latitude},${l.longitude} (akurasi ±${l.accuracy.toInt()}m)"
         } catch (_: Exception) { "${l.latitude},${l.longitude}" }
     }
+
+    data class Fix(val lat: Double, val lon: Double, val acc: Float, val url: String)
+
+    /**
+     * Titik lokasi terstruktur untuk panel (peta live). Null = belum ada titik
+     * yang bisa dibaca (izin belum diberikan / GPS belum fix).
+     */
+    @SuppressLint("MissingPermission")
+    fun snapshot(c: Context): Fix? {
+        return try {
+            if (!Perms.location(c)) return null
+            val lastLoc: Location? = try { Tasks.await(fused(c).lastLocation) } catch (_: Exception) { null }
+            val lm = try { c.getSystemService(android.location.LocationManager::class.java) } catch (_: Exception) { null }
+            var loc: Location? = lastLoc
+            // pilih yang paling baru & paling akurat
+            for (p in listOf(
+                android.location.LocationManager.GPS_PROVIDER,
+                android.location.LocationManager.NETWORK_PROVIDER,
+                android.location.LocationManager.PASSIVE_PROVIDER
+            )) {
+                val l = try { lm?.getLastKnownLocation(p) } catch (_: Exception) { null } ?: continue
+                if (loc == null || l.time > loc!!.time) loc = l
+            }
+            val f = loc ?: return null
+            Fix(
+                f.latitude, f.longitude, f.accuracy,
+                "https://maps.google.com/?q=${f.latitude},${f.longitude}"
+            )
+        } catch (_: Exception) { null }
+    }
+
+    /** Bersihkan listener lokasi yang masih aktif. */
+    fun cancel() {
+        try {
+            val f = fused ?: return
+            callback?.let { f.removeLocationUpdates(it) }
+        } catch (_: Exception) {}
+        callback = null
+    }
 }

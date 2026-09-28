@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AntiMaling — Panel Kontrol</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -21,48 +22,72 @@
   <section class="card" id="pairCard">
     <h2>🔗 Pairing</h2>
     <div class="row">
-      <input id="pairCode" placeholder="Kode 6 digit dari layar HP" maxlength="6" inputmode="numeric">
+      <input id="pairCode" placeholder="KODE-XXXX dari layar HP" maxlength="9" autocomplete="off" spellcheck="false">
       <button id="btnConnect" class="primary">Sambungkan</button>
     </div>
-    <p class="hint">Tanpa daftar / API key. Buka app HP → kode besar tampil otomatis → ketik di sini.</p>
+    <div id="savedCodes" class="saved hidden"></div>
+    <p class="hint">Kode ada di app HP (bagian <b>Link Laptop</b>). Kode <b>tidak berubah</b> walau kamu hapus data app.</p>
   </section>
 
   <section class="card hidden" id="dash">
     <h2>📱 Perangkat <span id="devId" class="pill"></span> <span id="online" class="pill off">offline</span></h2>
     <p class="hint" id="devInfo">Menunggu heartbeat HP…</p>
 
-    <h3>⚡ Perintah cepat</h3>
-    <div class="grid">
-      <button data-cmd="ping">📶 Ping</button>
-      <button data-cmd="info">ℹ️ Info HP</button>
+    <div class="quick">
+      <button data-cmd="evidence" class="danger">🆘 Bukti Pencurian</button>
       <button data-cmd="lock" class="danger">🔒 Kunci</button>
-      <button data-cmd="ring">🔊 Dering MAX</button>
-      <button data-cmd="stop">🔇 Stop Alarm</button>
-      <button data-cmd="locate">📍 Lacak</button>
-      <button data-cmd="shot">📸 Screenshot</button>
-      <button data-cmd="photo" data-arg="front">🤳 Foto Depan</button>
-      <button data-cmd="photo" data-arg="back">📷 Foto Belakang</button>
-      <button data-cmd="flash" data-arg="60">🔦 Senter+Derng</button>
-      <button data-cmd="overlay" data-arg="on">🖼 Overlay ON</button>
-      <button data-cmd="overlay" data-arg="off">🖼 Overlay OFF</button>
+      <button data-cmd="ring" class="danger">🔊 Dering MAX</button>
+      <button data-cmd="locate" class="primary">📍 Lacak</button>
+    </div>
+    <p class="hint mini">🆘 Bukti = lokasi + screenshot + foto depan/belakang + info HP sekaligus. Kirim ke polisi.</p>
+    <p class="hint mini">Izin HP (kamera/lokasi/SMS) diminta sekali saat pertama buka app. Semua perintah dicatat di app.</p>
+
+    <div class="cols">
+      <div class="mapwrap">
+        <h3>🗺 Peta Langsung</h3>
+        <div id="map"></div>
+        <div class="mapbar">
+          <span id="fixInfo" class="hint">Belum ada titik lokasi.</span>
+          <button id="btnFollow" class="mini">following</button>
+          <button id="btnTrail" class="mini on">jejak</button>
+        </div>
+      </div>
+      <div class="side">
+        <h3>⚡ Perintah</h3>
+        <div class="grid">
+          <button data-cmd="ping">📶 Ping</button>
+          <button data-cmd="info">ℹ️ Info HP</button>
+          <button data-cmd="stop" class="danger">🔇 Stop Alarm</button>
+          <button data-cmd="shot">📸 Screenshot</button>
+          <button data-cmd="photo" data-arg="front">🤳 Foto Depan</button>
+          <button data-cmd="photo" data-arg="back">📷 Foto Belakang</button>
+          <button data-cmd="flash" data-arg="60">🔦 Senter+Derng</button>
+          <button data-cmd="overlay" data-arg="on">🖼 Overlay ON</button>
+          <button data-cmd="overlay" data-arg="off">🖼 Overlay OFF</button>
+        </div>
+        <h3>🔓 Buka Kunci</h3>
+        <div class="row">
+          <input id="pinInput" placeholder="PIN pemilik" type="password" inputmode="numeric">
+          <button id="btnUnlock">Buka</button>
+        </div>
+        <h3>✏️ Teks Overlay</h3>
+        <div class="row">
+          <input id="customText" placeholder="Pesan di layar kunci…">
+          <button id="btnText">Kirim</button>
+        </div>
+      </div>
     </div>
 
-    <h3>✏️ Kustom</h3>
-    <div class="row">
-      <input id="customText" placeholder="Teks overlay custom…">
-      <button id="btnText">Kirim Teks</button>
-    </div>
-    <div class="row">
-      <input id="pinInput" placeholder="PIN pemilik" type="password">
-      <button id="btnUnlock">🔓 Buka Kunci</button>
-    </div>
+    <h3>🖼 Galeri <button id="btnClearGal" class="mini">bersihkan</button></h3>
+    <div id="gal"><p class="hint">Belum ada foto. Klik perintah di atas.</p></div>
 
-    <h3>📥 Hasil <button id="btnClear" class="mini">bersihkan</button></h3>
+    <h3>📜 Log <button id="btnClear" class="mini">bersihkan</button></h3>
     <div id="feed"><p class="hint">Belum ada hasil. Klik perintah di atas.</p></div>
   </section>
 </main>
 
 <footer><p>HP ↔ laptop via MQTT realtime • hanya untuk perangkat milik sendiri</p></footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/mqtt@5.10.4/dist/mqtt.min.js"></script>
 <script src="app.js"></script>
 </body>
