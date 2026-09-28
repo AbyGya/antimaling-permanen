@@ -216,12 +216,7 @@ object CommandHandler {
             try { LockNotifier.fire(c) } catch (_: Exception) {}
             try { GuardService.start(c) } catch (_: Exception) {}
             try { OverlayService.restart(c) } catch (_: Exception) {}
-            try {
-                val i = Intent(c, LockActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                }
-                c.startActivity(i)
-            } catch (_: Exception) {}
+            try { LockActivity.show(c) } catch (_: Exception) {}
         } catch (_: Exception) {}
     }
 

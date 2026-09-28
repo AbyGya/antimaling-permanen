@@ -9,8 +9,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.telephony.TelephonyManager
+import android.view.View
 import android.view.WindowManager
-import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
@@ -22,6 +22,7 @@ import com.antimaling.permanen.util.Prefs
 class LockActivity : AppCompatActivity() {
 
     private val entered = StringBuilder()
+    private var lastRelaunch = 0L
 
     /** Unlock jarak jauh (SMS/panel): tutup layar bila status sudah terbuka. */
     private val unlockRx = object : BroadcastReceiver() {
@@ -56,29 +57,39 @@ class LockActivity : AppCompatActivity() {
             if (Build.VERSION.SDK_INT >= 33) registerReceiver(unlockRx, IntentFilter(CommandHandler.UNLOCK_ACTION), Context.RECEIVER_NOT_EXPORTED)
             else registerReceiver(unlockRx, IntentFilter(CommandHandler.UNLOCK_ACTION))
         } catch (_: Exception) {}
+        try { refreshText() } catch (_: Exception) {}
+    }
+
+    private fun refreshText() {
+        try { findViewById<TextView>(R.id.tvLockText)?.text = Prefs.getText(this) } catch (_: Exception) {}
+    }
+
+    /**
+     * Dipanggil dari android:onClick di layout (tag berisi digit / "del" / "clear").
+     * Sengaja TIDAK memakai findViewById + setOnClickListener: kalau salah satu
+     * melempar exception, seluruh keypad ikut mati. Dipasang oleh Android saat inflate.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun onKeypadClick(v: View) {
+        val key = try { v.tag?.toString() ?: return } catch (_: Exception) { return }
+        // umpan balik: agar pengguna pasti tombolnya terdaftar
+        try { v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP) } catch (_: Exception) {}
         try {
-            findViewById<TextView>(R.id.tvLockText)?.text = Prefs.getText(this)
-            // keypad angka bawaan — anti keyboard tidak muncul
-            val keys = mapOf(
-                R.id.btnN1 to "1", R.id.btnN2 to "2", R.id.btnN3 to "3",
-                R.id.btnN4 to "4", R.id.btnN5 to "5", R.id.btnN6 to "6",
-                R.id.btnN7 to "7", R.id.btnN8 to "8", R.id.btnN9 to "9",
-                R.id.btnN0 to "0"
-            )
-            keys.forEach { (id, d) ->
-                findViewById<Button>(id)?.setOnClickListener { press(d) }
-            }
-            findViewById<Button>(R.id.btnDel)?.setOnClickListener {
-                try {
-                    if (entered.isNotEmpty()) entered.deleteCharAt(entered.length - 1)
-                    renderPin()
-                } catch (_: Exception) {}
-            }
-            findViewById<Button>(R.id.btnClear)?.setOnClickListener {
-                try { entered.clear(); renderPin() } catch (_: Exception) {}
-            }
-            findViewById<Button>(R.id.btnUnlock)?.setOnClickListener { checkPin() }
+            v.alpha = 0.5f
+            v.postDelayed({ try { v.alpha = 1f } catch (_: Exception) {} }, 90)
         } catch (_: Exception) {}
+
+        when (key) {
+            "del" -> { if (entered.isNotEmpty()) entered.deleteCharAt(entered.length - 1); renderPin() }
+            "clear" -> { entered.clear(); renderPin() }
+            else -> press(key)
+        }
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    fun onUnlockClick(v: View) {
+        try { v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP) } catch (_: Exception) {}
+        checkPin()
     }
 
     private fun renderPin() {
@@ -123,26 +134,41 @@ class LockActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        visible = true
         try {
             // jika sudah unlock via SMS, tutup otomatis
             if (!Prefs.isLocked(this)) finish()
-            else findViewById<TextView>(R.id.tvLockText)?.text = Prefs.getText(this)
+            else refreshText()
         } catch (_: Exception) {}
     }
 
+    override fun onStop() {
+        visible = false
+        try { super.onStop() } catch (_: Exception) {}
+    }
+
     override fun onDestroy() {
+        visible = false
         try { unregisterReceiver(unlockRx) } catch (_: Exception) {}
         super.onDestroy()
     }
 
-    override fun onPause() {        super.onPause()
+    override fun onPause() {
+        super.onPause()
         // Anti-bypass tombol Home: selama masih terkunci, tarik kunci balik ke depan.
         // Dilewati saat ada panggilan aktif agar telepon tetap bisa diangkat.
+        //
+        // PENTING: relaunch dibatasi (cooldown + flag), karena setiap startActivity
+        // membuat activity pause-resume, dan selama transisi itu window-nya tidak
+        // menerima sentuhan -> tombol keypad Professionals "tidak bisa dipencet".
         try {
             if (!Prefs.isLocked(this) || isFinishing || !callIdle()) return
+            val now = System.currentTimeMillis()
+            if (now - lastRelaunch < RELAUNCH_COOLDOWN) return
+            lastRelaunch = now
             Handler(Looper.getMainLooper()).postDelayed({
                 try {
-                    if (Prefs.isLocked(this@LockActivity) && callIdle()) {
+                    if (Prefs.isLocked(this@LockActivity) && callIdle() && !isFinishing) {
                         startActivity(Intent(this, LockActivity::class.java).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                         })
@@ -167,5 +193,29 @@ class LockActivity : AppCompatActivity() {
             if (Prefs.isLocked(this)) return
             super.onBackPressed()
         } catch (_: Exception) {}
+    }
+
+    companion object {
+        /** True saat layar kunci benar-benar sedang tampil & fokus. */
+        @Volatile var visible = false
+            private set
+
+        // PENTING: cooldown hanya menahan relaunch BERUNTUN (sistem yang menembak
+        // ulang tiap 60 dtk). Tidak discourage tekan Home asli dari pemilik —
+        // kalau cooldown ikut di-reset di onResume, celah bypass-nya terbuka.
+        private const val RELAUNCH_COOLDOWN = 1200L
+
+        /** Dipakai GuardService: jangan tembak ulang kalau sudah tampil. */
+        fun isShowing(): Boolean = visible
+
+        /** Tampilkan layar kunci. Aman dipanggil berulang. */
+        fun show(c: Context) {
+            try {
+                if (visible) return
+                c.startActivity(Intent(c, LockActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                })
+            } catch (_: Exception) {}
+        }
     }
 }

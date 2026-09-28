@@ -65,11 +65,13 @@ class GuardService : Service() {
     override fun onStartCommand(i: Intent?, flags: Int, id: Int): Int {
         try { startForeground(101, notif()) } catch (_: Exception) {}
         try { handleAction(i?.action) } catch (_: Exception) {}
-        // jika terkunci tapi overlay mati (mis. dibunuh), hidupkan lagi
+        // jika terkunci tapi overlay mati (mis. dibunuh), hidupkan lagi.
+        // WAJIB lewat LockActivity.show() yang mengecek apakah layar kunci sudah
+        // tampil — startActivity berulang bikin activity pause-resume terus, dan
+        // selama transisi itu keypad tidak menerima sentuhan.
         try {
-            if (Prefs.isLocked(this) && !CommandHandler.canDrawOverlay(this)) {
-                val li = Intent(this, LockActivity::class.java).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-                try { startActivity(li) } catch (_: Exception) {}
+            if (Prefs.isLocked(this) && !CommandHandler.canDrawOverlay(this) && !LockActivity.isShowing()) {
+                LockActivity.show(this)
             }
         } catch (_: Exception) {}
         return START_STICKY
