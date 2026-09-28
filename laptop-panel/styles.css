@@ -53,6 +53,10 @@ footer { text-align: center; color: var(--mut); font-size: 12px; padding: 20px; 
 .saved { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
 .saved::before { content: "Tersimpan:"; color: var(--mut); font-size: 12px; }
 .chip { padding: 6px 12px; font-size: 12px; border-radius: 20px; letter-spacing: .5px; }
+.chipwrap { display: inline-flex; align-items: center; }
+.chipx { padding: 6px 9px; font-size: 12px; border-radius: 0 20px 20px 0; margin-left: -8px; border-left: none; color: #ffb4ae; }
+.autoconn { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--mut); cursor: pointer; }
+.autoconn input { flex: none; width: 16px; height: 16px; min-width: 0; accent-color: var(--blu); }
 #pairCode { text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
 
 .quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }

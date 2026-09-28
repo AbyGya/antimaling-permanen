@@ -37,10 +37,14 @@ function renderSaved() {
   if (!list.length) { box.classList.add("hidden"); return; }
   box.classList.remove("hidden");
   box.innerHTML = "Tersimpan: " + list.map(c =>
-    `<button class="chip" data-code="${c}">${fmtCode(c)}</button>`).join("");
+    `<span class="chipwrap"><button class="chip" data-code="${c}">${fmtCode(c)}</button>` +
+    `<button class="chipx" data-forget="${c}" title="Lupakan">×</button></span>`).join("");
   box.querySelectorAll("[data-code]").forEach(b => b.onclick = () => {
     $("pairCode").value = fmtCode(b.dataset.code);
     connect(b.dataset.code);
+  });
+  box.querySelectorAll("[data-forget]").forEach(b => b.onclick = e => {
+    e.stopPropagation(); forgetCode(b.dataset.forget);
   });
 }
 
@@ -51,6 +55,32 @@ $("btnConnect").onclick = () => {
   connect(c);
 };
 $("pairCode").addEventListener("keydown", e => { if (e.key === "Enter") $("btnConnect").click(); });
+
+/** Putuskan sesi & kembali ke layar pairing — selalu bisa dipakai. */
+function disconnect(note) {
+  try { clearInterval(onlineTimer); } catch {}
+  try { clearTimeout(offTimer); offTimer = null; } catch {}
+  try { client?.end(true); } catch {}
+  client = null;
+  code = null; token = null; pendingNonce = null;
+  restoreNewCodeBtn();
+  setConn(false, "Belum tersambung");
+  $("dash").classList.add("hidden");
+  $("pairCard").classList.remove("hidden");
+  $("btnHome").classList.add("hidden");
+  $("pairCode").value = "";
+  renderSaved();
+  if (note) $("pairHint").textContent = note;
+}
+$("btnHome").onclick = () => disconnect("");
+
+/** Tombol hapus satu kode dari daftar tersimpan. */
+function forgetCode(c) {
+  const list = loadCodes().filter(x => x !== c);
+  localStorage.setItem(LS_CODES, JSON.stringify(list));
+  if (localStorage.getItem(LS_CODE) === c) localStorage.removeItem(LS_CODE);
+  renderSaved();
+}
 
 function setConn(on, txt) {
   $("dot").className = "dot " + (on ? "on" : "off");
@@ -64,6 +94,7 @@ async function connect(c) {
   saveCode(c);
   clearInterval(onlineTimer);
   setConn(false, "Menghubungkan…");
+  $("btnHome").classList.remove("hidden");
   addLog(`Menghubungkan ke ${fmtCode(c)}…`, true);
   client = mqtt.connect(BROKER, {
     clientId: "am-panel-" + Math.random().toString(16).slice(2, 10),
@@ -100,7 +131,7 @@ async function connect(c) {
     } catch {}
   });
   client.on("error", e => setConn(false, "Error: " + (e.message || e)));
-  client.on("close", () => setConn(false, "Terputus — mencoba lagi…"));
+  client.on("close", () => { if (code) setConn(false, "Terputus — mencoba lagi…"); });
   onlineTimer = setInterval(() => {
     if (!code) return;
     if (Date.now() - lastSeen > 45000) setOffline();
@@ -249,9 +280,17 @@ $("btnUnlock").onclick = () => { const v = $("pinInput").value.trim(); if (v) se
 $("btnClear").onclick = () => $("feed").innerHTML = '<p class="hint">Dibersihkan.</p>';
 $("btnClearGal").onclick = () => $("gal").innerHTML = '<p class="hint">Galeri dikosongkan.</p>';
 
-// ---------- auto-sambung ulang kode terakhir
+// ---------- awal: sambung otomatis hanya kalau dicentang
 (function init() {
   renderSaved();
+  const on = localStorage.getItem("am.auto") === "1";
+  $("chkAuto").checked = on;
   const last = localStorage.getItem(LS_CODE);
-  if (last && last.length === 8) { $("pairCode").value = fmtCode(last); connect(last); }
+  if (last && last.length === 8) $("pairCode").value = fmtCode(last);
+  if (on && last && last.length === 8) connect(last);
+  else if (last && last.length === 8) $("pairHint").textContent =
+    "Kode terakhir: " + fmtCode(last) + " — centang di atas untuk sambung otomatis, atau klik kode di atas.";
 })();
+$("chkAuto").onchange = () => {
+  localStorage.setItem("am.auto", $("chkAuto").checked ? "1" : "0");
+};

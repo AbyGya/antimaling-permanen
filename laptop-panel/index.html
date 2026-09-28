@@ -15,7 +15,10 @@
     <h1>AntiMaling <span>Panel Kontrol</span></h1>
     <p class="sub">Kontrol HP kapan saja — selama HP online</p>
   </div>
-  <div class="conn"><span id="dot" class="dot off"></span><span id="connText">Belum tersambung</span></div>
+  <div class="conn">
+    <span id="dot" class="dot off"></span><span id="connText">Belum tersambung</span>
+    <button id="btnHome" class="mini hidden">⬅ Ganti HP</button>
+  </div>
 </header>
 
 <main>
@@ -26,7 +29,8 @@
       <button id="btnConnect" class="primary">Sambungkan</button>
     </div>
     <div id="savedCodes" class="saved hidden"></div>
-    <p class="hint">Kode ada di app HP (bagian <b>Link Laptop</b>). Kode <b>tidak berubah</b> walau kamu hapus data app.</p>
+    <label class="autoconn"><input type="checkbox" id="chkAuto"> Otomatis sambung ke kode terakhir</label>
+    <p class="hint" id="pairHint">Kode ada di app HP (bagian <b>5. Kontrol Laptop</b>). Kode <b>tidak berubah</b> walau kamu hapus data app.</p>
   </section>
 
   <section class="card hidden" id="dash">
