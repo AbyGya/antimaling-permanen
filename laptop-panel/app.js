@@ -167,10 +167,39 @@ $("btnTrail").onclick = () => {
   if (line) line.setLatLngs(showTrail ? trail : []);
 };
 
+// ---------- ganti kode pairing dari panel ----------
+let pendingNonce = null;
+$("btnNewCode").onclick = () => {
+  if (!confirm("Ganti kode pairing HP?\n\nKode lama langsung tidak berlaku — panel ini akan otomatis memakai kode baru.")) return;
+  pendingNonce = Math.random().toString(16).slice(2) + Date.now().toString(16);
+  $("btnNewCode").disabled = true;
+  $("btnNewCode").textContent = "Meminta kode baru…";
+  send("newcode", pendingNonce);
+};
+function restoreNewCodeBtn(msg) {
+  $("btnNewCode").disabled = false;
+  $("btnNewCode").textContent = "Ganti Kode Pairing";
+  if (msg) addLog(msg, true);
+}
+
+function handleNewCode(d) {
+  // hanya terima balasan yang cocok nonce milik permintaan kita
+  if (!d.newcode || d.nonce !== pendingNonce) return false;
+  const old = code, fresh = d.newcode;
+  addLog(`Kode lama <b>${fmtCode(old)}</b> → baru <b>${fmtCode(fresh)}</b>`, true);
+  restoreNewCodeBtn();
+  pendingNonce = null;
+  // panel pindah ke kode baru
+  $("pairCode").value = fmtCode(fresh);
+  setTimeout(() => connect(fresh), 400);
+  return true;
+}
+
 // ---------- render
 function render(d) {
   if (typeof d.lat === "number" && d.lat !== 0) setFix(d.lat, d.lon, d.acc || 0);
   if (d.image) addImage(d);
+  if (d.cmd === "newcode") { if (handleNewCode(d)) return; }
   addLog(`<b>${esc(d.cmd || "")}</b> — ${linkify(esc(d.text || ""))}`);
 }
 
@@ -210,6 +239,7 @@ function send(type, arg = "") {
   pending[id] = setTimeout(() => {
     delete pending[id];
     addLog(`⌛ <b>${esc(type)}</b>: belum ada balasan 30 dtk — HP mungkin offline.`, true);
+    if (type === "newcode") { restoreNewCodeBtn("Ganti kode gagal — HP tidak menjawab."); pendingNonce = null; }
   }, 30000);
 }
 document.querySelectorAll("[data-cmd]").forEach(b =>

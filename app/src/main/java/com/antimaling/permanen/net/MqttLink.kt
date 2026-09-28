@@ -7,6 +7,7 @@ import android.util.Base64
 import com.antimaling.permanen.control.CommandHandler
 import com.antimaling.permanen.control.FlashManager
 import com.antimaling.permanen.control.RingManager
+import com.antimaling.permanen.util.CodeGen
 import com.antimaling.permanen.util.Prefs
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
 import org.eclipse.paho.client.mqttv3.MqttCallbackExtended
@@ -33,6 +34,8 @@ object MqttLink {
     @Volatile private var liveCode: String = ""
     @Volatile var lastError: String = ""
     @Volatile private var beatGen = 0
+    /** Batas waktu (ms) selama mana rotasi kode sedang berjalan. */
+    @Volatile private var rotatingUntil = 0L
 
     fun cmdTopic(code: String) = "am/$code/cmd"
     fun resTopic(code: String) = "am/$code/res"
@@ -104,6 +107,13 @@ object MqttLink {
     private fun ensure(c: Context) {
         val code = ensurePair(c)
         val cur = client
+        // Saat rotasi kode sedang berjalan, JANGAN putus koneksi lama dulu:
+        // balasan kode baru masih melaju di topik kode lama. Watchdog
+        // GuardService (tiap 15 dtk) sering memanggil start() dan akan
+        // disconnect duluan kalau tidak dikunci di sini.
+        if (rotatingUntil > System.currentTimeMillis()) {
+            if (cur != null && cur.isConnected) return
+        }
         if (cur != null && liveCode == code) return // biar auto-reconnect yang kerja
         // tutup koneksi lama (mis. habis ganti kode)
         try { try { cur?.disconnectForcibly() } catch (_: Exception) {} } catch (_: Exception) {}
@@ -174,6 +184,39 @@ object MqttLink {
         }.apply { isDaemon = true; name = "mqtt-beat"; start() }
     }
 
+    /**
+     * Ganti kode pairing HP dari panel laptop.
+     *
+     * Urutannya penting: kode baru dikirim balik ke topik kode LAMA dulu
+     * (panel masih listen di sana), baru sambungan diputus dan dibangun ulang
+     * dengan kode baru. Nonce dari panel dipakai supaya panel hanya menerima
+     *balasan untuk permintaannya sendiri, bukan balasan orang lain.
+     */
+    private fun rotateCode(c: Context, oldCode: String, nonce: String, id: String) {
+        try {
+            val newCode = CodeGen.random()
+            Prefs.setPair(c, newCode)
+            val out = JSONObject()
+            out.put("id", id)
+            out.put("cmd", "newcode")
+            out.put("t", Prefs.token(oldCode))
+            out.put("nonce", nonce)
+            out.put("newcode", newCode)
+            out.put("kind", "text")
+            out.put("text", "🔑 Kode pairing baru: $newCode")
+            out.put("ts", System.currentTimeMillis().toString())
+            client?.publish(resTopic(oldCode), MqttMessage(out.toString().toByteArray()).apply { qos = 1 })
+
+            // beri waktu broker mengirim balasan sebelum pindah koneksi
+            rotatingUntil = System.currentTimeMillis() + 2500
+            Thread {
+                try { Thread.sleep(2500) } catch (_: Exception) {}
+                try { rotatingUntil = 0L } catch (_: Exception) {}
+                try { reconnect(c) } catch (_: Exception) {}
+            }.apply { isDaemon = true; name = "mqtt-rotate"; start() }
+        } catch (_: Exception) {}
+    }
+
     private fun onCmd(c: Context, code: String, payload: String) {
         try {
             val j = JSONObject(payload)
@@ -181,6 +224,12 @@ object MqttLink {
             val arg = j.optString("arg", "")
             val id = j.optString("id", "")
             if (type.isBlank()) return
+
+            // Ganti kode pairing dari panel laptop.
+            // Balasan dikirim ke topik kode LAMA (panel masih subscribe di sana),
+            // baru HP pindah ke kode baru ~2 detik kemudian.
+            if (type.equals("newcode", true)) return rotateCode(c, code, arg.trim(), id)
+
             val results = CommandHandler.execCloud(c, type, arg)
             val token = Prefs.token(code)
             var first = true
