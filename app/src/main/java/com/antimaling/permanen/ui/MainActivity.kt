@@ -98,6 +98,30 @@ class MainActivity : AppCompatActivity() {
             toast("Membangunkan service… buka 2 detik lagi")
             Handler(Looper.getMainLooper()).postDelayed({ try { refresh() } catch (_: Exception) {} }, 2000)
         }
+
+        // Tombol diagnosis: membaca alasan kematian process langsung di HP,
+        // tanpa perlu komputer tersambung.
+        findViewById<Button>(R.id.btnDiag)?.setOnClickListener {
+            try {
+                val s = StringBuilder("Riwayat kematian process:\n\n")
+                val list = com.antimaling.permanen.util.ExitInfo.reports(this, 8)
+                if (list.isEmpty()) s.append("Tidak ada — app belum pernah dibunuh.\n")
+                list.forEach { e ->
+                    s.append("• ").append(e.reason).append("\n   ").append(e.at)
+                    if (e.detail.isNotBlank()) s.append("\n   ").append(e.detail.take(160))
+                    s.append("\n\n")
+                }
+                s.append("Kirim teks ini ke saya kalau perlu.\n\n")
+                s.append("USER_REQUESTED / USER_STOPPED → kamu atau XOS yang")
+                s.append("\n   menghentikan; perlu whitelist 8 langkah XOS.")
+                s.append("\nCRASH → bug di app, bisa saya perbaiki.")
+                s.append("\nLOW_MEMORY → XOS kehabisan RAM.")
+                s.append("\nOTHER / SIGNALED → cleaner XOS yang membunuhnya.")
+                AlertDialog.Builder(this).setTitle("Diagnosis Service")
+                    .setMessage(s.toString())
+                    .setPositiveButton("Tutup", null).show()
+            } catch (_: Exception) { toast("Gagal baca diagnosis") }
+        }
         findViewById<Button>(R.id.btnHideIcon)?.setOnClickListener { setIcon(false) }
         findViewById<Button>(R.id.btnShowIcon)?.setOnClickListener { setIcon(true) }
 
@@ -261,8 +285,22 @@ class MainActivity : AppCompatActivity() {
             val camErr = try { Prefs.getCamError(this) } catch (_: Exception) { "" }
             val ovlErr = try { com.antimaling.permanen.service.OverlayService.lastStartError } catch (_: Exception) { "" }
             val api = try { android.os.Build.VERSION.SDK_INT } catch (_: Exception) { 0 }
+            val exits = try { com.antimaling.permanen.util.ExitInfo.reports(this, 4) } catch (_: Exception) { emptyList<com.antimaling.permanen.util.ExitInfo.Report>() }
             val s = buildString {
                 append("Android API   : ").append(api).append(if (api >= 36) "  (XOS 16 - ketat)" else "").append('\n')
+
+                // INI YANG PALING PENTING: alasan sebenarnya kenapa process dibunuh
+                append("\n── Kenapa process mati ──\n")
+                if (exits.isEmpty()) {
+                    append("Belum ada riwayat (app belum pernah dibunuh).\n")
+                } else {
+                    exits.forEach { e ->
+                        append("• ").append(e.reason).append('\n')
+                        append("   ").append(e.at).append('\n')
+                    }
+                }
+                append("\n")
+
                 append("Service hidup : ").append(Prefs.getSvcStart(this@MainActivity)).append('\n')
                 append("Foreground     : ").append(Prefs.getFgStatus(this@MainActivity)).append('\n')
                 append("Heartbeat      : ").append(Prefs.getBeat(this@MainActivity)).append('\n')
