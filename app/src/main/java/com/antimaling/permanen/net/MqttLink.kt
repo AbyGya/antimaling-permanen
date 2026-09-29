@@ -283,6 +283,7 @@ object MqttLink {
                     out.put("lat", r.lat); out.put("lon", r.lon); out.put("acc", r.acc.toDouble())
                 }
                 if (r.image.isNotEmpty()) out.put("image", shrinkB64(r.image))
+                if (r.newcode.isNotEmpty()) out.put("pin", r.newcode)
                 first = false
                 try {
                     client?.publish(resTopic(code), MqttMessage(out.toString().toByteArray()).apply { qos = 1 })

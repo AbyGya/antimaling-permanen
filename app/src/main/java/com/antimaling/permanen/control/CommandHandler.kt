@@ -24,7 +24,9 @@ object CommandHandler {
         val image: String = "",
         val lat: Double = 0.0,
         val lon: Double = 0.0,
-        val acc: Float = 0f
+        val acc: Float = 0f,
+        /** Payload khusus (mis. PIN hasil "getpin"). */
+        val newcode: String = ""
     )
 
     /** Broadcast agar LockActivity yang sedang tampil langsung tutup. */
@@ -119,6 +121,13 @@ object CommandHandler {
                 out.add(CloudResult(DeviceInfo.text(c)))
                 if (out.size <= 1) out.add(CloudResult("⚠️ Bukti terbatas — cek izin kamera & lokasi."))
                 out
+            }
+            // Ambil PIN saat dibutuhkan untuk sinkronisasi ke panel.
+            // Sengaja TIDAK dikirim otomatis — panel menyimpannya di localStorage
+            // laptop, bukan lewat broker publik. Lihat catatan di laptop-panel/app.js.
+            "getpin" -> {
+                val p = Prefs.getPin(c)
+                listOf(CloudResult("🔑 PIN: $p", newcode = p))
             }
             "info" -> listOf(CloudResult(DeviceInfo.text(c)))
             // --- Foto pencuri di layar kunci ---

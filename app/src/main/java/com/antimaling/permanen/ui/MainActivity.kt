@@ -259,7 +259,10 @@ class MainActivity : AppCompatActivity() {
                     ?.isIgnoringBatteryOptimizations(packageName) == true
             } catch (_: Exception) { false }
             val camErr = try { Prefs.getCamError(this) } catch (_: Exception) { "" }
+            val ovlErr = try { com.antimaling.permanen.service.OverlayService.lastStartError } catch (_: Exception) { "" }
+            val api = try { android.os.Build.VERSION.SDK_INT } catch (_: Exception) { 0 }
             val s = buildString {
+                append("Android API   : ").append(api).append(if (api >= 36) "  (XOS 16 - ketat)" else "").append('\n')
                 append("Service hidup : ").append(Prefs.getSvcStart(this@MainActivity)).append('\n')
                 append("Foreground     : ").append(Prefs.getFgStatus(this@MainActivity)).append('\n')
                 append("Heartbeat      : ").append(Prefs.getBeat(this@MainActivity)).append('\n')
@@ -268,6 +271,10 @@ class MainActivity : AppCompatActivity() {
                 append("Device Admin   : ").append(yn(admin)).append('\n')
                 append("Overlay izin   : ").append(yn(overlay)).append('\n')
                 append("Bebas battery  : ").append(yn(batt))
+                if (ovlErr.isNotBlank()) {
+                    append("\nOverlay start  : DITOLAK (Android 16)")
+                    append("\n                 dicoba ulang tiap 15 dtk")
+                }
                 if (camErr.isNotBlank() && camErr != "-") {
                     append("\nKamera         : ").append(camErr)
                     append("\nFoto terakhir  : ").append(Prefs.getLastPhoto(this@MainActivity))

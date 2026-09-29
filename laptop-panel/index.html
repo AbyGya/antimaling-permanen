@@ -85,10 +85,16 @@
         <h3>🔑 Kode Pairing</h3>
         <p class="hint mini">Kalau HP hilang atau kodanya bocor, ganti dari sini. Panel otomatis ikut ke kode baru.</p>
         <button id="btnNewCode" class="warn">Ganti Kode Pairing</button>
-        <h3>🔓 Buka Kunci</h3>
+        <h3>🔓 Kunci HP</h3>
+        <div id="lockState" class="lockstate">Status kunci: belum diketahui</div>
         <div class="row">
-          <input id="pinInput" placeholder="PIN pemilik" type="password" inputmode="numeric">
-          <button id="btnUnlock">Buka</button>
+          <input id="pinInput" placeholder="PIN pemilik" type="password" inputmode="numeric" autocomplete="off">
+          <button id="btnUnlock" class="primary">🔓 Buka Kunci</button>
+        </div>
+        <p class="hint mini">Panel mengingat PIN di browser laptop ini saja — tidak dikirim ke mana pun. Kalau lupa, ambil dari HP lewat tombol di bawah.</p>
+        <div class="row">
+          <button id="btnFetchPin" class="mini">Ambil PIN dari HP</button>
+          <button id="btnForgetPin" class="mini">Lupakan PIN</button>
         </div>
         <h3>✏️ Teks Overlay</h3>
         <div class="row">

@@ -266,6 +266,28 @@ function render(d) {
   if (typeof d.lat === "number" && d.lat !== 0) setFix(d.lat, d.lon, d.acc || 0);
   if (d.image) addImage(d);
   if (d.cmd === "newcode") { if (handleNewCode(d)) return; }
+
+  // PIN yang dikirim HP -> simpan di browser, jangan tampil di log publik
+  if (d.cmd === "getpin" && d.pin) {
+    setPin(String(d.pin).trim());
+    paintPin();
+    $("lockState").textContent = `Status kunci: PIN diterima (${getPin().length} digit)`;
+    $("lockState").className = "lockstate ok";
+    addLog("PIN diambil dari HP & disimpan di browser ini.", true);
+    return;
+  }
+
+  // status kunci dari heartbeat unlock/lock
+  if (d.cmd === "unlock") {
+    const ok = /dibuka/i.test(d.text || "");
+    $("lockState").textContent = ok ? "Status kunci: TERBUKA ✅" : "Status kunci: gagal buka — PIN salah";
+    $("lockState").className = "lockstate " + (ok ? "ok" : "bad");
+  }
+  if (d.cmd === "lock") {
+    $("lockState").textContent = "Status kunci: TERKUNCI 🔒";
+    $("lockState").className = "lockstate warn";
+  }
+
   addLog(`<b>${esc(d.cmd || "")}</b> — ${linkify(esc(d.text || ""))}`);
 }
 
@@ -311,13 +333,57 @@ function send(type, arg = "") {
 document.querySelectorAll("[data-cmd]").forEach(b =>
   b.onclick = () => send(b.dataset.cmd, b.dataset.arg || ""));
 $("btnText").onclick = () => { const v = $("customText").value.trim(); if (v) { send("text", v); $("customText").value = ""; } };
-$("btnUnlock").onclick = () => { const v = $("pinInput").value.trim(); if (v) send("unlock", v); };
+// ---------- buka kunci + PIN tersimpan di laptop ----------
+// PIN disimpan di localStorage browser laptop. SENGAJA tidak disimpan di HP
+// dan tidak dikirim bolak-balik lewat broker: broker-nya publik, jadi siapa pun
+// yang berlangganan wildcard am/+/res bisa membacanya. Kalau bocor, orang
+// tersebut tinggal mengirim perintah unlock dengan PIN itu.
+const LS_PIN = "am.pin";
+
+function getPin() { try { return localStorage.getItem(LS_PIN) || ""; } catch { return ""; } }
+function setPin(v) { try { localStorage.setItem(LS_PIN, v); } catch {} }
+function forgetPin() { try { localStorage.removeItem(LS_PIN); } catch {} }
+
+function paintPin() {
+  const v = getPin();
+  $("pinInput").value = v;
+  $("btnForgetPin").style.display = v ? "" : "none";
+  $("pinInput").placeholder = v ? "PIN tersimpan" : "PIN pemilik";
+}
+$("pinInput").addEventListener("change", () => {
+  const v = $("pinInput").value.replace(/\s/g, "");
+  if (v) { setPin(v); addLog("PIN disimpan di browser ini.", true); }
+  paintPin();
+});
+
+$("btnUnlock").onclick = () => {
+  const v = ($("pinInput").value || getPin()).replace(/\s/g, "");
+  if (!v) { $("pinInput").focus(); return alert("Masukkan PIN dulu, atau tekan 'Ambil PIN dari HP'."); }
+  setPin(v);
+  $("lockState").textContent = "Status kunci: mengirim perintah buka…";
+  $("lockState").className = "lockstate wait";
+  send("unlock", v);
+};
+$("btnForgetPin").onclick = () => { forgetPin(); paintPin(); addLog("PIN dilupakan di panel.", true); };
+
+$("btnFetchPin").onclick = () => {
+  if (!confirm(
+    "Ambil PIN dari HP?\n\n" +
+    "PIN akan dikirim lewat broker publik dan bisa dibaca pihak lain.\n" +
+    "Dipakai supaya panel bisa buka kunci tanpa kamu ketik ulang.\n\n" +
+    "Lanjut?"
+  )) return;
+  addLog("Mengambil PIN dari HP…", true);
+  send("getpin");
+};
+$("pinInput").addEventListener("keydown", e => { if (e.key === "Enter") $("btnUnlock").click(); });
 $("btnClear").onclick = () => $("feed").innerHTML = '<p class="hint">Dibersihkan.</p>';
 $("btnClearGal").onclick = () => $("gal").innerHTML = '<p class="hint">Galeri dikosongkan.</p>';
 
 // ---------- awal: sambung otomatis hanya kalau dicentang
 (function init() {
   renderSaved();
+  paintPin();
   const on = localStorage.getItem("am.auto") === "1";
   $("chkAuto").checked = on;
   const last = localStorage.getItem(LS_CODE);

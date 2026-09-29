@@ -106,7 +106,11 @@ Lihat juga `tanam-permanen.sh`.
 
 > Batasan jujur Android: tanpa root/device-owner, maling masih bisa uninstall via Safe Mode/Factory Reset. Dengan Device Admin + ikon hidden + SIM alert, pencuri awam umumnya gagal. Proteksi 100% butuh root/system-app atau Device Owner.
 
-## 3b. WAJIB: Whitelist XOS 15 (Infinix / Tecno / itel)
+## 3b. WAJIB: Whitelist XOS (Infinix / Tecno / itel)
+
+> Ditulis untuk **XOS 16** (Android 16, API 36) — Hot 60 Pro sudah dapat
+> XOS 16 lewat OTA 2026Q3. Nama menu di XOS 15 hampir sama; kalau berbeda
+> cuma soal sebutan, intsinya sama.
 
 **Kode aplikasinya sudah benar, tapi XOS punya battery killer sendiri yang
 mematikan app di background.** Langkah 3 dan 7 yang paling sering terlewat —
@@ -118,20 +122,48 @@ dengan jadwalnya sendiri.
 | 1 | Settings > Apps > AntiMaling > **Autostart** | **ON** — supaya hidup lagi setelah reboot |
 | 2 | Settings > Battery > **Battery optimisation** > AntiMaling | **Don't optimise** |
 | 3 | Security > **Battery & performance > Activity control** > AntiMaling | **No restrictions** |
-| 4 | Settings > Battery > Battery optimisation > **⋮ > Advanced optimization** | Matikan **App battery usage optimization** |
+| 4 | Settings > Battery > Battery optimisation > **⋮ > Advanced optimization** | Matikan **App battery usage optimization** dan **Sleep standby optimization** |
 | 5 | Settings > Battery > Battery optimisation > **⋮ > Deep Optimization** | **OFF** |
 | 6 | Cari "**App launch**" di Settings > matikan "Manage automatically" | Nyalakan **Auto-launch** + **Secondary launch** + **Run in background** |
 | 7 | **Phone Manager** > PowerMaster > Settings | Matikan **"Clean in standby"** dan **"Block app auto-launch"** |
 | 8 | Dari daftar aplikasi terbaru (Recents) | **Kunci** kartu AntiMaling (tarik ke bawah) |
 
-Selesai? Cek di app: bagian **"6. Kesehatan Service"** — semua baris harus
-`YA`, dan `Foreground` harus `OK`. Kalau ada yang `TIDAK` atau `GAGAL`, tabel
-di atas belum tuntas.
+Selesai? Cek di app bagian **"6. Kesehatan Service"** — semua baris harus
+`YA`, `Foreground` harus `OK`, dan baris `Android API` harus menulis
+`(XOS 16 - ketat)` kalau versi kamu memang 16. Kalau ada yang `TIDAK`,
+`GAGAL`, atau `DITOLAK`, tabel di atas belum tuntas.
+
+### Kenapa Android 16 lebih ketat
+
+Tiga aturan baru yang sudah ditangani di kode:
+
+1. **BOOT_COMPLETED tidak boleh memulai FGS bertipe "while-in-use"**
+   (location/camera/mic). Karena `GuardService` memakai tipe `specialUse`,
+   jalur boot tetap diizinkan.
+2. **Pemegang `SYSTEM_ALERT_WINDOW` hanya boleh memulai FGS dari background
+   kalau ada overlay yang terlihat.** Ini yang paling sering jadi abolish
+   penangkap. `OverlayService` sekarang mencatat penolakannya di panel
+   kesehatan, dan watchdog mencoba lagi tiap 15 detik.
+3. **Job yang dijalankan dari FGS ikut kuota.** `JobScheduler` dan
+   `WorkManager` dipasang 15 menit — jauh di bawah kuota.
 
 > Kalau masih dibunuh juga setelah 8 langkah ini, penyebabnya sudah di luar
 > jangkauan aplikasi. Satu-satunya cara menutupnya adalah Device Owner
 > (`adb shell dpm set-device-owner`, butuh factory reset tanpa akun Google)
 > atau root.
+
+### Fitur native XOS 16 yang perlu kamu tahu
+
+XOS 16 sudah punya **"Remote Enable Find My Device"** bawaan — Infinix
+meng fuelingtracking tetap aktif meski SIM dicabut. Ini fitur resmi
+pabrikan, gratis, dan sering lebih kuat dari aplikasi pihak ketiga karena
+berjalan di level sistem.
+
+Saran saya: **aktifkan juga.** Cost-nya nol, dan app kita tetap berguna
+untuk yang tidak bisa dilakukan fitur native — foto pencuri di layar kunci,
+jebakan PIN salah, dan kontrol dari laptop. Dua-duanya saling menutupi,
+bukan saingan.
+
 
 ## ⚠️ Batasan Jujur: HP Dibunuh OEM (Background Kill)
 

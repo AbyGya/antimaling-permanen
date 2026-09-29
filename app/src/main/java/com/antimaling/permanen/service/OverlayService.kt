@@ -9,6 +9,7 @@ import android.graphics.Typeface
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -114,7 +115,16 @@ class OverlayService : Service() {
                 }
                 val it = Intent(c, OverlayService::class.java).apply { action = "ON" }
                 if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(it) else c.startService(it)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                // Android 16: app pemegang SYSTEM_ALERT_WINDOW hanya boleh
+                // memulai FGS dari background kalau sedang ada overlay yang
+                // terlihat. Kalau ditolak, jangan ditelan — watchdog
+                // GuardService akan mencoba lagi 15 detik kemudian.
+                lastStartError = e.message ?: e.javaClass.simpleName
+                Log.w("OverlayService", "start ditolak: $lastStartError")
+            }
         }
+
+        @Volatile var lastStartError: String = ""
     }
 }

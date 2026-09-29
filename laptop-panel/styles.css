@@ -58,6 +58,11 @@ footer { text-align: center; color: var(--mut); font-size: 12px; padding: 20px; 
 .autoconn { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--mut); cursor: pointer; }
 .autoconn input { flex: none; width: 16px; height: 16px; min-width: 0; accent-color: var(--blu); }
 input.filein { padding: 9px 12px; font-size: 12px; }
+.lockstate { font-size: 13px; font-weight: 700; padding: 10px 12px; border-radius: 10px; background: #0b1424; border: 1px solid var(--line); margin: 10px 0; }
+.lockstate.ok   { color: #bbf7d0; border-color: var(--grn); }
+.lockstate.bad  { color: #ffb4ae; border-color: var(--acc); }
+.lockstate.warn { color: #fcd34d; border-color: #f59e0b; }
+.lockstate.wait { color: var(--mut); border-color: var(--blu); }
 .prev { margin-top: 10px; }
 .prev img { width: 130px; border-radius: 10px; border: 1px solid var(--line); display: block; }
 .prev span { display: block; font-size: 11px; color: var(--mut); margin-top: 6px; }
