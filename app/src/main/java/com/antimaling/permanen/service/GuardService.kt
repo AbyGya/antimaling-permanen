@@ -6,17 +6,16 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
+import androidx.core.app.ServiceCompat
 import com.antimaling.permanen.AntiMalApp
-import com.antimaling.permanen.R
 import com.antimaling.permanen.control.CommandHandler
 import com.antimaling.permanen.control.FlashManager
 import com.antimaling.permanen.control.LocateManager
@@ -25,13 +24,12 @@ import com.antimaling.permanen.lock.LockActivity
 import com.antimaling.permanen.net.MqttLink
 import com.antimaling.permanen.ui.MainActivity
 import com.antimaling.permanen.util.Prefs
-import java.util.concurrent.TimeUnit
 
 class GuardService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
 
-    // Watchdog: selama terkunci, pastikan banner overlay hidup.
+    // Watchdog: selama service hidup, jaga overlay + link laptop + alarm tetap armed.
     // (Start service dari service foreground yang sudah jalan = diizinkan.)
     private val watch = object : Runnable {
         override fun run() {
@@ -42,33 +40,64 @@ class GuardService : Service() {
             } catch (_: Exception) {}
             // jaga link laptop tetap nyambung
             try { MqttLink.start(this@GuardService) } catch (_: Exception) {}
+            // alarm harus selalu ter-armed ulang, kalau tidak dan proses dibunuh
+            // OEM tidak ada apa pun yang membangunkan app lagi
+            try { armRestartAlarm() } catch (_: Exception) {}
             try { handler.postDelayed(this, 15000) } catch (_: Exception) {}
         }
     }
 
     override fun onBind(i: Intent?): IBinder? = null
 
+    /**
+     * Masuk foreground dengan tipe MINIMAL.
+     *
+     * Dulu panggil startForeground(id, notif) yang memakai SEMUA tipe yang
+     * dideklarasikan di manifest (saat itu termasuk camera|mediaProjection).
+     * Di Android 14/15 itu ditolak saat dipanggil dari background, dan
+     * exception-nya ditelan — sehingga service tidak pernah sampai kondisi
+     * foreground lalu dibunuh sistem dalam ~5 detik.
+     *
+     * Sekarang: tipe eksplisit + error dicatat di Prefs supaya terlihat di app.
+     */
+    private fun goForeground(): Boolean {
+        return try {
+            ServiceCompat.startForeground(this, NOTIF_ID, notif(), typeSpecialUse())
+            Prefs.setFgStatus(this, "OK")
+            true
+        } catch (e: Exception) {
+            val msg = e.javaClass.simpleName + ": " + (e.message ?: "?")
+            Prefs.setFgStatus(this, "GAGAL — $msg")
+            Log.e(TAG, "startForeground gagal: $msg")
+            false
+        }
+    }
+
+    private fun typeSpecialUse(): Int =
+        if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
+
     override fun onCreate() {
         super.onCreate()
-        try { startForeground(101, notif()) } catch (_: Exception) {}
+        Prefs.setSvcStart(this)
+        goForeground()
         try { MqttLink.start(this) } catch (_: Exception) {}
         // cek flag stop persisten (survive process kill)
         try { RingManager.checkStopFlag(this) } catch (_: Exception) {}
         try { FlashManager.checkStopFlag(this) } catch (_: Exception) {}
+        try { armRestartAlarm() } catch (_: Exception) {}
+        try { KeepAlive.scheduleJob(this) } catch (_: Exception) {}
         try { handler.postDelayed(watch, 15000) } catch (_: Exception) {}
-        try {
-            val req = PeriodicWorkRequestBuilder<KeepAliveWorker>(15, TimeUnit.MINUTES).build()
-            WorkManager.getInstance(this).enqueueUniquePeriodicWork("keep", ExistingPeriodicWorkPolicy.KEEP, req)
-        } catch (_: Exception) {}
     }
 
     override fun onStartCommand(i: Intent?, flags: Int, id: Int): Int {
-        try { startForeground(101, notif()) } catch (_: Exception) {}
+        try { goForeground() } catch (_: Exception) {}
         try { handleAction(i?.action) } catch (_: Exception) {}
-        // jika terkunci tapi overlay mati (mis. dibunuh), hidupkan lagi.
-        // WAJIB lewat LockActivity.show() yang mengecek apakah layar kunci sudah
-        // tampil — startActivity berulang bikin activity pause-resume terus, dan
-        // selama transisi itu keypad tidak menerima sentuhan.
+        // re-arm alarm + job setiap kali service dinyalakan. Sebelumnya hanya
+        // di onTaskRemoved/onDestroy, yang TIDAK dipanggil saat proses dibunuh
+        // OEM — jadi tidak ada apa pun yang membangunkan app lagi.
+        try { armRestartAlarm() } catch (_: Exception) {}
+        try { KeepAlive.scheduleJob(this) } catch (_: Exception) {}
+        // jika terkunci tapi overlay mati (mis. dibunuh), hidupkan lagi
         try {
             if (Prefs.isLocked(this) && !CommandHandler.canDrawOverlay(this) && !LockActivity.isShowing()) {
                 LockActivity.show(this)
@@ -92,9 +121,12 @@ class GuardService : Service() {
             val it = Intent(this, MainActivity::class.java)
             PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         } catch (_: Exception) { null }
+        val txt = try {
+            if (Prefs.isLocked(this)) "🔒 Terkunci • panel tersambung" else "Proteksi aktif • panel tersambung"
+        } catch (_: Exception) { "Proteksi permanen berjalan" }
         return NotificationCompat.Builder(this, AntiMalApp.CH_GUARD)
             .setContentTitle("AntiMaling aktif")
-            .setContentText("Proteksi permanen berjalan")
+            .setContentText(txt)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentIntent(pi)
             .setOngoing(true)
@@ -107,7 +139,7 @@ class GuardService : Service() {
             val it = Intent(this, GuardService::class.java)
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(it) else startService(it)
         } catch (_: Exception) {}
-        try { restartAlarm() } catch (_: Exception) {}
+        try { armRestartAlarm() } catch (_: Exception) {}
         super.onTaskRemoved(root)
     }
 
@@ -117,12 +149,19 @@ class GuardService : Service() {
         try {
             if (Prefs.isLocked(this) || Prefs.isRinging(this)) start(this)
         } catch (_: Exception) {}
-        try { restartAlarm() } catch (_: Exception) {}
+        try { armRestartAlarm() } catch (_: Exception) {}
         super.onDestroy()
     }
 
-    /** Alarm inexact (tanpa izin khusus): bangunkan service bila dibunuh OEM. */
-    private fun restartAlarm() {
+    /**
+     * Alarm inexact (tanpa izin khusus): bangunkan service bila dibunuh OEM.
+     *
+     * WAJIB dipanggil ulang secara berkala (dari watchdog + onStartCommand),
+     * bukan hanya di onDestroy/onTaskRemoved. Kedua callback itu tidak
+     * dipanggil ketika proses dibunuh paksa oleh sistem, sehingga sebelumnya
+     * tidak ada alarm yang pernah bersiap setelah HP dibunuh OEM.
+     */
+    private fun armRestartAlarm() {
         try {
             val am = getSystemService(AlarmManager::class.java) ?: return
             val pi = PendingIntent.getBroadcast(
@@ -135,17 +174,27 @@ class GuardService : Service() {
                 AlarmManager.ELAPSED_REALTIME_WAKEUP,
                 SystemClock.elapsedRealtime() + 60_000, pi
             )
-        } catch (_: Exception) {}
+            Prefs.setAlarmArmed(this, true)
+        } catch (_: Exception) {
+            try { Prefs.setAlarmArmed(this, false) } catch (_: Exception) {}
+        }
     }
 
     companion object {
         const val RESTART_ACTION = "com.antimaling.permanen.RESTART"
+        private const val TAG = "GuardService"
+        private const val NOTIF_ID = 101
 
         fun start(c: Context) {
             try {
                 val it = Intent(c, GuardService::class.java)
                 if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(it) else c.startService(it)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                // startForegroundService dari background bisa ditolak Android 14+.
+                // Catat supaya kelihatan, jangan ditelan diam-diam.
+                try { Prefs.setFgStatus(c, "GAGAL start: ${e.message}") } catch (_: Exception) {}
+                Log.e(TAG, "gagal start service: ${e.message}")
+            }
         }
     }
 }

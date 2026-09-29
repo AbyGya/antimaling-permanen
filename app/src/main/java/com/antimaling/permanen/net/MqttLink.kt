@@ -140,7 +140,8 @@ object MqttLink {
                     beat(code, cl)
                     cl.subscribe(cmdTopic(code), 1)
                     Prefs.setLastSync(c, stamp(true, "tersambung ke broker"))
-                    startBeat(code, cl)
+                    try { Prefs.setBeat(c) } catch (_: Exception) {}
+                    startBeat(c, code, cl)
                 } catch (e: Exception) { lastError = e.message ?: "err" }
             }
             override fun connectionLost(t: Throwable?) {
@@ -170,15 +171,19 @@ object MqttLink {
         } catch (_: Exception) {}
     }
 
-    private fun startBeat(code: String, cl: MqttClient) {
+    private fun startBeat(c: Context, code: String, cl: MqttClient) {
         val g = ++beatGen
         Thread {
             while (g == beatGen) {
                 try { Thread.sleep(20000) } catch (_: Exception) { break }
                 try {
                     if (g != beatGen) break
-                    if (client === cl && cl.isConnected && liveCode == code) beat(code, cl)
-                    else break
+                    if (client === cl && cl.isConnected && liveCode == code) {
+                        beat(code, cl)
+                        // catat heartbeat terakhir supaya panel kesehatan tahu
+                        // kapan terakhir benar-benar bicara dengan broker
+                        try { Prefs.setBeat(c) } catch (_: Exception) {}
+                    } else break
                 } catch (_: Exception) { break }
             }
         }.apply { isDaemon = true; name = "mqtt-beat"; start() }
@@ -214,6 +219,38 @@ object MqttLink {
                 try { rotatingUntil = 0L } catch (_: Exception) {}
                 try { reconnect(c) } catch (_: Exception) {}
             }.apply { isDaemon = true; name = "mqtt-rotate"; start() }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Kirim hasil ke panel di luar alur perintah (mis. foto otomatis saat
+     * terjadi pencurian). Aman dipanggil kapan saja; diam-diam kalau belum
+     * tersambung.
+     */
+    fun push(
+        cmd: String,
+        text: String,
+        image: String = "",
+        lat: Double = 0.0,
+        lon: Double = 0.0,
+        acc: Float = 0f
+    ) {
+        try {
+            val cl = client ?: return
+            if (!cl.isConnected) return
+            val code = liveCode
+            val out = JSONObject()
+            out.put("id", "")
+            out.put("cmd", cmd)
+            out.put("t", Prefs.token(code))
+            out.put("kind", if (image.isNotEmpty()) "image" else "text")
+            out.put("text", text.take(2000))
+            out.put("ts", System.currentTimeMillis().toString())
+            if (lat != 0.0 || lon != 0.0) {
+                out.put("lat", lat); out.put("lon", lon); out.put("acc", acc.toDouble())
+            }
+            if (image.isNotEmpty()) out.put("image", shrinkB64(image))
+            cl.publish(resTopic(code), MqttMessage(out.toString().toByteArray()).apply { qos = 1 })
         } catch (_: Exception) {}
     }
 

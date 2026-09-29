@@ -45,8 +45,11 @@ Atau tanpa git: zip folder ini > upload via web github.com > Add file > Upload f
    Semua izin bisa dicabut kapan saja: *Settings > Apps > AntiMaling > Permissions*
 3. Isi PIN (default `1234`) + nomor trusted + teks overlay → **Simpan**
 4. Klik: Aktifkan Device Admin → Izinkan Overlay → Bebas Battery
-5. Tes: Kunci, Dering, Senter, Lacak, Overlay ON
-6. Opsional: **Sembunyikan Ikon** (buka lagi via Settings > Apps > AntiMaling)
+5. **WAJIB: lakukan 8 langkah whitelist XOS 15** (bagian 3b) — tanpa ini app
+   akan dibunuh XOS di background
+6. Tes: Kunci, Dering, Senter, Lacak, Overlay ON
+7. Cek bagian **6. Kesehatan Service** — semua harus `YA` / `OK`
+8. Opsional: **Sembunyikan Ikon** (buka lagi via Settings > Apps > AntiMaling)
 
 ### Jejak audit
 Section **6. Riwayat Kontrol dari Laptop** di app berisi daftar lengkap perintah
@@ -66,6 +69,20 @@ perlu pairing ulang setelah Clear storage.
 Fitur panel: peta langsung + jejak perjalanan, galeri foto/screenshot, tombol
 **Bukti Pencurian** (lokasi + screenshot + 2 foto + info HP sekaligus), dan
 kode yang tersimpan di browser supaya tidak perlu diketik ulang.
+
+### Foto pencuri di layar kunci
+Dari panel: **Foto Maling di Layar Kunci** → pilih file → **Kirim Foto**.
+Foto langsung tampil di layar kunci HP, disertai teks ancaman + lokasi
+live. Disimpan di internal storage HP sehingga **bertahan setelah reboot**.
+Hapus lagi kapan saja dari panel. Teks ancamannya bisa diganti juga
+(**Kirim teks ancaman**).
+
+### Jebakan otomatis
+Tanpa perlu kirim perintah, app bereaksi sendiri saat:
+- **PIN salah 3×** → foto + sirene + SMS ke nomor kamu
+- **SIM dicabut** → HP terkunci + foto + sirene + SMS
+
+Counter reset otomatis begitu kamu berhasil buka kunci dengan PIN benar.
 
 > Broker MQTT-nya publik, jadi **kode pairing adalah password** — jangan bagikan
 > ke siapa pun. Verifikasi: `am/{kode}/cmd` → jangan ketik manual.
@@ -88,6 +105,33 @@ adb shell dpm set-device-owner com.antimaling.permanen/.receiver.MyAdminReceiver
 Lihat juga `tanam-permanen.sh`.
 
 > Batasan jujur Android: tanpa root/device-owner, maling masih bisa uninstall via Safe Mode/Factory Reset. Dengan Device Admin + ikon hidden + SIM alert, pencuri awam umumnya gagal. Proteksi 100% butuh root/system-app atau Device Owner.
+
+## 3b. WAJIB: Whitelist XOS 15 (Infinix / Tecno / itel)
+
+**Kode aplikasinya sudah benar, tapi XOS punya battery killer sendiri yang
+mematikan app di background.** Langkah 3 dan 7 yang paling sering terlewat —
+pengaturan sistem sudah semua benar, tapi cleaner bawaan tetap menutup app
+dengan jadwalnya sendiri.
+
+| # | Menu | Yang diubah |
+|---|------|------------|
+| 1 | Settings > Apps > AntiMaling > **Autostart** | **ON** — supaya hidup lagi setelah reboot |
+| 2 | Settings > Battery > **Battery optimisation** > AntiMaling | **Don't optimise** |
+| 3 | Security > **Battery & performance > Activity control** > AntiMaling | **No restrictions** |
+| 4 | Settings > Battery > Battery optimisation > **⋮ > Advanced optimization** | Matikan **App battery usage optimization** |
+| 5 | Settings > Battery > Battery optimisation > **⋮ > Deep Optimization** | **OFF** |
+| 6 | Cari "**App launch**" di Settings > matikan "Manage automatically" | Nyalakan **Auto-launch** + **Secondary launch** + **Run in background** |
+| 7 | **Phone Manager** > PowerMaster > Settings | Matikan **"Clean in standby"** dan **"Block app auto-launch"** |
+| 8 | Dari daftar aplikasi terbaru (Recents) | **Kunci** kartu AntiMaling (tarik ke bawah) |
+
+Selesai? Cek di app: bagian **"6. Kesehatan Service"** — semua baris harus
+`YA`, dan `Foreground` harus `OK`. Kalau ada yang `TIDAK` atau `GAGAL`, tabel
+di atas belum tuntas.
+
+> Kalau masih dibunuh juga setelah 8 langkah ini, penyebabnya sudah di luar
+> jangkauan aplikasi. Satu-satunya cara menutupnya adalah Device Owner
+> (`adb shell dpm set-device-owner`, butuh factory reset tanpa akun Google)
+> atau root.
 
 ## ⚠️ Batasan Jujur: HP Dibunuh OEM (Background Kill)
 
@@ -143,9 +187,13 @@ Panel: `cd laptop-panel && python3 server.py`.
 ## Struktur
 ```
 app/src/main/java/com/antimaling/permanen/
-  AntiMalApp.kt, util/Prefs.kt, util/Perms.kt
+  AntiMalApp.kt
+  util/Prefs.kt, util/Perms.kt, util/Consent.kt, util/CodeGen.kt, util/MalingPhoto.kt
   receiver/MyAdminReceiver.kt, BootReceiver.kt, SmsReceiver.kt, SimChangeReceiver.kt
-  service/GuardService.kt, OverlayService.kt, KeepAliveWorker.kt
-  control/CommandHandler.kt, RingManager.kt, FlashManager.kt, LocateManager.kt
-  lock/LockActivity.kt, ui/MainActivity.kt
+  service/GuardService.kt, OverlayService.kt, CamService.kt,
+          KeepAlive.kt, KeepAliveJob.kt, KeepAliveWorker.kt
+  control/CommandHandler.kt, RingManager.kt, FlashManager.kt, LocateManager.kt, TheftGuard.kt
+  spy/ShotTaker.kt, CamSnap.kt, DeviceInfo.kt
+  lock/LockActivity.kt, ui/MainActivity.kt, ui/ShotConsentActivity.kt
+laptop-panel/  (server.py, index.html, app.js, styles.css)
 ```

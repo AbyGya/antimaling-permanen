@@ -23,7 +23,11 @@ class SimChangeReceiver : BroadcastReceiver() {
             if (old.isBlank()) { Prefs.setSim(c, cur); return }
             if (old != cur) {
                 Prefs.setSim(c, cur)
-                CommandHandler.reply(c, trusted, "AntiMaling: SIM BERUBAH! HP mungkin dicuri. Lokasi: kirim #LOCATE. Untuk kunci kirim #LOCK.")
+                // Jebakan: SIM dicabut = tanda kuat HP dicuri.
+                // Foto + sirene + kunci + kabari pemilik.
+                try { CommandHandler.lock(c) } catch (_: Exception) {}
+                try { com.antimaling.permanen.control.TheftGuard.onSimRemoved(c) } catch (_: Exception) {}
+                CommandHandler.reply(c, trusted, "AntiMaling: SIM BERUBAH! HP mungkin dicuri. HP sudah dikunci & sirene berbunyi. Kirim #LOCATE untuk posisi.")
             }
         } catch (_: Exception) {}
     }

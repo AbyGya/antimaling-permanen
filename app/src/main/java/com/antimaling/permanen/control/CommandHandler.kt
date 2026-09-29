@@ -121,6 +121,36 @@ object CommandHandler {
                 out
             }
             "info" -> listOf(CloudResult(DeviceInfo.text(c)))
+            // --- Foto pencuri di layar kunci ---
+            "setphoto" -> {
+                val err = com.antimaling.permanen.util.MalingPhoto.saveFromBase64(c, arg)
+                listOf(
+                    if (err.isBlank())
+                        CloudResult("🖼 Foto pencuri tersimpan & TAMPIL DI LAYAR KUNCI.\nKalau layar kunci sedang terbuka, tekan Kunci lagi untuk melihatnya.")
+                    else CloudResult("❌ Gagal simpan foto: $err")
+                )
+            }
+            "clearsphoto" -> {
+                val ok = com.antimaling.permanen.util.MalingPhoto.delete(c)
+                listOf(if (ok) CloudResult("🗑 Foto pencuri dihapus dari layar kunci.") else CloudResult("⚠️ Tidak ada foto untuk dihapus."))
+            }
+            "showphoto" -> {
+                val has = com.antimaling.permanen.util.MalingPhoto.exists(c)
+                listOf(
+                    if (has) CloudResult("🖼 Foto pencuri AKTIF di layar kunci.")
+                    else CloudResult("ℹ️ Belum ada foto pencuri. Kirim dulu lewat tombol 'Kirim Foto Maling' di panel.")
+                )
+            }
+            "warn" -> {
+                val t = arg.trim()
+                if (t.isBlank()) listOf(CloudResult("❌ Teks kosong."))
+                else {
+                    Prefs.setText(c, t)
+                    Prefs.putStr(c, "warn_text", t)
+                    OverlayService.restart(c)
+                    listOf(CloudResult("✏️ Teks ancaman di layar kunci diganti."))
+                }
+            }
             else -> listOf(CloudResult("❓ Perintah '$type' tidak dikenal."))
         }
     } catch (e: Exception) { listOf(CloudResult("⚠️ Error: ${e.message}")) }

@@ -58,10 +58,55 @@ class LockActivity : AppCompatActivity() {
             else registerReceiver(unlockRx, IntentFilter(CommandHandler.UNLOCK_ACTION))
         } catch (_: Exception) {}
         try { refreshText() } catch (_: Exception) {}
+        loadEvidence()
     }
 
     private fun refreshText() {
         try { findViewById<TextView>(R.id.tvLockText)?.text = Prefs.getText(this) } catch (_: Exception) {}
+    }
+
+    /**
+     * Muat foto pencuri + lokasi ke layar kunci.
+     * Semua kerja berat (decode bitmap, ambil lokasi) jalan di thread
+     * background supaya keypad tidak pernah lag — keypad yang tidak
+     * bisa dipencet adalah bug yang pernah terjadi sebelumnya.
+     */
+    private fun loadEvidence() {
+        val box = try { findViewById<android.view.View>(R.id.llEvidence) } catch (_: Exception) { null } ?: return
+        try {
+            val warn = try { Prefs.getStr(this, "warn_text", "") } catch (_: Exception) { "" }
+            if (warn.isNotBlank()) findViewById<TextView>(R.id.tvWarn)?.text = warn
+        } catch (_: Exception) {}
+
+        if (!try { com.antimaling.permanen.util.MalingPhoto.exists(this) } catch (_: Exception) { false }) {
+            // tidak ada foto -> tetap tampilkan peringatan + lokasi saja
+            try { box.visibility = android.view.View.VISIBLE } catch (_: Exception) {}
+            loadFix()
+            return
+        }
+
+        try { box.visibility = android.view.View.VISIBLE } catch (_: Exception) {}
+        Thread {
+            val bmp = try { com.antimaling.permanen.util.MalingPhoto.load(this) } catch (_: Exception) { null }
+            if (bmp != null) {
+                try { runOnUiThread {
+                    findViewById<android.widget.ImageView>(R.id.imgMaling)?.setImageBitmap(bmp)
+                } } catch (_: Exception) {}
+            }
+            loadFix()
+        }.apply { isDaemon = true; name = "lock-evidence"; start() }
+    }
+
+    /** Ambil lokasi di background lalu tulis ke layar (tidak boleh di thread UI). */
+    private fun loadFix() {
+        Thread {
+            val f = try { com.antimaling.permanen.control.LocateManager.snapshot(this) } catch (_: Exception) { null }
+            val txt = if (f == null) "Lokasi belum tersedia — pemilik sedang mencoba."
+            else "📍 ${"%.5f".format(f.lat)}, ${"%.5f".format(f.lon)}  (±${f.acc.toInt()}m)\n${f.url}"
+            try { runOnUiThread {
+                findViewById<TextView>(R.id.tvFix)?.text = txt
+            } } catch (_: Exception) {}
+        }.apply { isDaemon = true; name = "lock-fix"; start() }
     }
 
     /**
@@ -111,10 +156,16 @@ class LockActivity : AppCompatActivity() {
         try {
             if (entered.toString() == Prefs.getPin(this)) {
                 CommandHandler.unlock(this)
+                // pemilik sah berhasil buka -> reset semua counter jebakan
+                try { com.antimaling.permanen.control.TheftGuard.clear(this) } catch (_: Exception) {}
                 try { Toast.makeText(this, "Dibuka", Toast.LENGTH_SHORT).show() } catch (_: Exception) {}
                 finish()
             } else {
-                try { Toast.makeText(this, "PIN salah!", Toast.LENGTH_SHORT).show() } catch (_: Exception) {}
+                val n = try { com.antimaling.permanen.control.TheftGuard.onWrongPin(this) } catch (_: Exception) { 0 }
+                val msg = if (n >= com.antimaling.permanen.control.TheftGuard.PIN_THRESHOLD)
+                    "PIN salah! ($n×) — alarm & foto aktif"
+                else "PIN salah! ($n/${com.antimaling.permanen.control.TheftGuard.PIN_THRESHOLD})"
+                try { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() } catch (_: Exception) {}
                 entered.clear()
                 renderPin()
             }
@@ -126,8 +177,9 @@ class LockActivity : AppCompatActivity() {
         try {
             if (!Prefs.isLocked(this)) finish()
             else {
-                findViewById<TextView>(R.id.tvLockText)?.text = Prefs.getText(this)
+                refreshText()
                 CommandHandler.onLockShown(this)
+                loadEvidence()
             }
         } catch (_: Exception) {}
     }

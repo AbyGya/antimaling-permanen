@@ -69,6 +69,19 @@
           <button data-cmd="overlay" data-arg="on">🖼 Overlay ON</button>
           <button data-cmd="overlay" data-arg="off">🖼 Overlay OFF</button>
         </div>
+        <h3>🖼 Foto Maling di Layar Kunci</h3>
+        <p class="hint mini">Kirim foto pencuri — akan tampil di layar kunci HP bersama teks ancaman &amp; lokasi live. Disimpan di HP, bertahan setelah reboot.</p>
+        <div class="row">
+          <input type="file" id="malingFile" accept="image/*" class="filein">
+          <button id="btnSendPhoto">Kirim Foto</button>
+        </div>
+        <div class="row">
+          <button id="btnShowPhoto" class="mini">Cek status</button>
+          <button id="btnClearPhoto" class="mini">Hapus foto</button>
+          <button id="btnSendWarn" class="mini">Kirim teks ancaman</button>
+        </div>
+        <div id="photoPrev" class="prev hidden"></div>
+
         <h3>🔑 Kode Pairing</h3>
         <p class="hint mini">Kalau HP hilang atau kodanya bocor, ganti dari sini. Panel otomatis ikut ke kode baru.</p>
         <button id="btnNewCode" class="warn">Ganti Kode Pairing</button>

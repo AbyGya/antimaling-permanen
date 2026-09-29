@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Button
@@ -84,6 +86,17 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnStopAll)?.setOnClickListener { CommandHandler.stopAll(this); toast("Semua alarm STOP"); refresh() }
         findViewById<Button>(R.id.btnClearAudit)?.setOnClickListener {
             try { Prefs.putStr(this, "audit", ""); toast("Riwayat dibersihkan"); refresh() } catch (_: Exception) {}
+        }
+        findViewById<Button>(R.id.btnRefreshHealth)?.setOnClickListener {
+            try {
+                // paksa bangunkan semua jaring pengaman, lalu tampilkan hasilnya
+                GuardService.start(this)
+                com.antimaling.permanen.service.KeepAlive.scheduleJob(this)
+                com.antimaling.permanen.service.KeepAlive.scheduleWorker(this)
+                MqttLink.start(this)
+            } catch (_: Exception) {}
+            toast("Membangunkan service… buka 2 detik lagi")
+            Handler(Looper.getMainLooper()).postDelayed({ try { refresh() } catch (_: Exception) {} }, 2000)
         }
         findViewById<Button>(R.id.btnHideIcon)?.setOnClickListener { setIcon(false) }
         findViewById<Button>(R.id.btnShowIcon)?.setOnClickListener { setIcon(true) }
@@ -225,6 +238,42 @@ class MainActivity : AppCompatActivity() {
                     if (log.isEmpty()) "Belum ada perintah dari panel."
                     else log.joinToString("\n")
             } catch (_: Exception) {}
+            refreshHealth()
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Panel kesehatan: menampilkan bukti service benar-benar hidup atau tidak.
+     * Tujuannya supaya pengguna tidak perlu menebak kenapa mati.
+     */
+    private fun refreshHealth() {
+        try {
+            val yn = { b: Boolean -> if (b) "YA" else "TIDAK" }
+            val admin = try {
+                val dpm = getSystemService(DevicePolicyManager::class.java)
+                dpm?.isAdminActive(ComponentName(this, MyAdminReceiver::class.java)) == true
+            } catch (_: Exception) { false }
+            val overlay = try { Settings.canDrawOverlays(this) } catch (_: Exception) { false }
+            val batt = try {
+                getSystemService(PowerManager::class.java)
+                    ?.isIgnoringBatteryOptimizations(packageName) == true
+            } catch (_: Exception) { false }
+            val camErr = try { Prefs.getCamError(this) } catch (_: Exception) { "" }
+            val s = buildString {
+                append("Service hidup : ").append(Prefs.getSvcStart(this@MainActivity)).append('\n')
+                append("Foreground     : ").append(Prefs.getFgStatus(this@MainActivity)).append('\n')
+                append("Heartbeat      : ").append(Prefs.getBeat(this@MainActivity)).append('\n')
+                append("Alarm 60 dtk   : ").append(yn(Prefs.getAlarmArmed(this@MainActivity))).append('\n')
+                append("JobScheduler   : ").append(yn(Prefs.getJobArmed(this@MainActivity))).append('\n')
+                append("Device Admin   : ").append(yn(admin)).append('\n')
+                append("Overlay izin   : ").append(yn(overlay)).append('\n')
+                append("Bebas battery  : ").append(yn(batt))
+                if (camErr.isNotBlank() && camErr != "-") {
+                    append("\nKamera         : ").append(camErr)
+                    append("\nFoto terakhir  : ").append(Prefs.getLastPhoto(this@MainActivity))
+                }
+            }
+            findViewById<TextView>(R.id.tvHealth)?.text = s
         } catch (_: Exception) {}
     }
 

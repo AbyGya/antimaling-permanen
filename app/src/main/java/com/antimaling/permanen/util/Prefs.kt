@@ -132,4 +132,47 @@ object Prefs {
             p(c).edit().putString("audit", merged).apply()
         } catch (_: Exception) {}
     }
+
+    // ---- Panel kesehatan service ----
+    // Tujuannya: kalau service mati, pengguna bisa TAHU penyebabnya
+    // daripada menebak. Semua status dikumpulkan di sini.
+
+    fun setSvcStart(c: Context) { putStr(c, "h_svcstart", now()) }
+    fun getSvcStart(c: Context) = getStr(c, "h_svcstart", "belum pernah")
+
+    /** Status startForeground terakhir. "OK" atau pesan error. */
+    fun setFgStatus(c: Context, v: String) { putStr(c, "h_fg", v) }
+    fun getFgStatus(c: Context) = getStr(c, "h_fg", "-")
+
+    fun setAlarmArmed(c: Context, v: Boolean) { putBool(c, "h_alarm", v) }
+    fun getAlarmArmed(c: Context) = getBool(c, "h_alarm", false)
+
+    fun setBeat(c: Context) { putStr(c, "h_beat", now()) }
+    fun getBeat(c: Context) = getStr(c, "h_beat", "belum pernah")
+
+    fun setCamError(c: Context, v: String) { putStr(c, "h_cam", v) }
+    fun getCamError(c: Context) = getStr(c, "h_cam", "-")
+
+    fun setJobArmed(c: Context, v: Boolean) { putBool(c, "h_job", v) }
+    fun getJobArmed(c: Context) = getBool(c, "h_job", false)
+
+    fun setLastPhoto(c: Context, v: String) { putStr(c, "h_photo", v) }
+    fun getLastPhoto(c: Context) = getStr(c, "h_photo", "belum pernah")
+
+    // ---- Percobaan buka gagal (trigger foto + siren otomatis) ----
+    fun getWrongPin(c: Context): Int = try { p(c).getInt("wrong_pin", 0) } catch (_: Exception) { 0 }
+    fun setWrongPin(c: Context, v: Int) { try { p(c).edit().putInt("wrong_pin", v).apply() } catch (_: Exception) {} }
+    fun resetWrongPin(c: Context) { setWrongPin(c, 0) }
+
+    // ---- Keadaan jebakan: sudah berbunyi untuk kejadian ini ----
+    fun getTheftFired(c: Context): Boolean = getBool(c, "theft_fired", false)
+    fun setTheftFired(c: Context, v: Boolean) { putBool(c, "theft_fired", v) }
+    fun resetTheft(c: Context) {
+        setWrongPin(c, 0)
+        setTheftFired(c, false)
+    }
+
+    private fun now(): String = try {
+        java.text.SimpleDateFormat("dd/MM HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+    } catch (_: Exception) { "-" }
 }

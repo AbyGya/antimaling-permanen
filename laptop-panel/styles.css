@@ -57,6 +57,10 @@ footer { text-align: center; color: var(--mut); font-size: 12px; padding: 20px; 
 .chipx { padding: 6px 9px; font-size: 12px; border-radius: 0 20px 20px 0; margin-left: -8px; border-left: none; color: #ffb4ae; }
 .autoconn { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--mut); cursor: pointer; }
 .autoconn input { flex: none; width: 16px; height: 16px; min-width: 0; accent-color: var(--blu); }
+input.filein { padding: 9px 12px; font-size: 12px; }
+.prev { margin-top: 10px; }
+.prev img { width: 130px; border-radius: 10px; border: 1px solid var(--line); display: block; }
+.prev span { display: block; font-size: 11px; color: var(--mut); margin-top: 6px; }
 #pairCode { text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
 
 .quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }

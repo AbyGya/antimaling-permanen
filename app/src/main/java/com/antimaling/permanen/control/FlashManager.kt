@@ -16,7 +16,8 @@ object FlashManager {
             // Batalkan stop yang tertunda dari proses sebelumnya.
             // Tanpa baris ini, start() pernah menyalakan flag stop lewat
             // silence() lalu checkStopFlag() akan mematikan senter lagi begitu
-            // service tersambung ulang — itu sebabnya "fungsi只在 app terbuka".
+            // service tersambung ulang — itu sebabnya "fungsi hanya hidup saat
+            // app terbuka".
             Prefs.setStopFlash(c, false)
             silence(c)
             running = true

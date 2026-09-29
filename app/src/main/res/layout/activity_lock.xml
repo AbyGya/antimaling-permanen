@@ -30,6 +30,53 @@
             android:textColor="#FFFFFF"
             android:textSize="16sp" />
 
+        <!--
+          Foto pencuri + jejak lokasi. Sengaja DI ATAS tombol PIN supaya
+          Whoever yang memegang HP langsung melihatnya sebelum sempat
+          mencoba membuka kunci.
+        -->
+        <LinearLayout
+            android:id="@+id/llEvidence"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="#B3000000"
+            android:orientation="vertical"
+            android:padding="10dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/imgMaling"
+                android:layout_width="match_parent"
+                android:layout_height="220dp"
+                android:adjustViewBounds="true"
+                android:background="#111"
+                android:contentDescription="Foto pencuri"
+                android:scaleType="centerCrop" />
+
+            <TextView
+                android:id="@+id/tvWarn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="HP ini sedang dilacak. Foto dan lokasi dikirim ke pemilik."
+                android:textColor="#FF5252"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvFix"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="monospace"
+                android:gravity="center"
+                android:text="Mencari lokasi…"
+                android:textColor="#94A3B8"
+                android:textSize="10sp" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/tvInfo"
             android:layout_width="match_parent"

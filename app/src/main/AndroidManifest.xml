@@ -140,16 +140,41 @@
             </intent-filter>
         </receiver>
 
-        <!-- Guard permanen -->
+        <!--
+          Guard permanen.
+          PENTING: foregroundServiceType HANYA "specialUse".
+          Dulu juga mendaftarkan camera|mediaProjection|location, padahal service ini
+          tidak pernah memakainya. Di Android 14/15, FGS yang mendeklarasikan tipe
+          yang sedang tidak dipakai akan DITOLAK saat startForeground() dari
+          background -> exception -> (dulu ditelan) -> service dibunuh sistem
+          sebelum sempat bekerja. Gejalanya: jalan saat app dibuka, mati begitu ditutup.
+        -->
         <service
             android:name=".service.GuardService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="location|specialUse|mediaProjection|camera">
+            android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Anti-maling: kunci, lacak, alarm darurat agar tetap aktif" />
+                android:value="Anti-maling: menjaga koneksi panel, menghidupkan ulang overlay dan layar kunci" />
         </service>
+
+        <!--
+          Camera: FGS type camera HANYA dipakai saat benar-benar mengambil foto,
+          DAN service dipanggil dari activity yang sedang tampil (bukan dari
+          background). Dideklarasikan terpisah supaya tidak mengganggu GuardService.
+        -->
+        <service
+            android:name=".service.CamService"
+            android:enabled="false"
+            android:exported="false"
+            android:foregroundServiceType="camera" />
+
+        <!-- Jaring pengaman kedua: JobScheduler lebih dipatuhi OEM daripada WorkManager -->
+        <service
+            android:name=".service.KeepAliveJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <!-- Overlay text home/lock -->
         <service

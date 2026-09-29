@@ -198,6 +198,41 @@ $("btnTrail").onclick = () => {
   if (line) line.setLatLngs(showTrail ? trail : []);
 };
 
+// ---------- kirim foto pencuri ke layar kunci HP ----------
+$("btnSendPhoto").onclick = () => {
+  const f = $("malingFile").files[0];
+  if (!f) return alert("Pilih file foto dulu.");
+  if (f.size > 8 * 1024 * 1024) return alert("Foto terlalu besar. Maksimal 8 MB.");
+  addLog(`Mengunggah foto (${(f.size / 1024).toFixed(0)} KB)…`, true);
+  const fr = new FileReader();
+  fr.onload = () => {
+    // buang prefix "data:image/jpeg;base64,"
+    const b64 = String(fr.result).split(",")[1] || "";
+    $("btnSendPhoto").disabled = true;
+    $("btnSendPhoto").textContent = "Mengirim…";
+    send("setphoto", b64);
+    setTimeout(() => {
+      $("btnSendPhoto").disabled = false;
+      $("btnSendPhoto").textContent = "Kirim Foto";
+    }, 8000);
+    const p = $("photoPrev");
+    p.classList.remove("hidden");
+    p.innerHTML = `<img src="${fr.result}"><span>akan tampil di layar kunci HP</span>`;
+  };
+  fr.onerror = () => alert("Gagal membaca file.");
+  fr.readAsDataURL(f);
+};
+$("btnShowPhoto").onclick = () => send("showphoto");
+$("btnClearPhoto").onclick = () => {
+  if (!confirm("Hapus foto pencuri dari layar kunci HP?")) return;
+  send("clearsphoto");
+  $("photoPrev").classList.add("hidden");
+};
+$("btnSendWarn").onclick = () => {
+  const v = prompt("Teks ancaman yang tampil di layar kunci:", "HP ini sedang dilacak. Foto dan lokasi dikirim ke pemilik.");
+  if (v && v.trim()) send("warn", v.trim());
+};
+
 // ---------- ganti kode pairing dari panel ----------
 let pendingNonce = null;
 $("btnNewCode").onclick = () => {
