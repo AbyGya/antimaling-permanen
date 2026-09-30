@@ -5,28 +5,38 @@ import android.app.job.JobService
 import android.util.Log
 
 /**
- * JobService jaring kedua. Dipanggil JobScheduler supaya service dibangunkan
- * ulang walau proses sudah dibunuh OEM. Sengaja sangat tipis — semua
- * pekerjaanTaruh di KeepAlive.pulse() supaya mudah diuji.
+ * JobService jaring kedua — dipanggil JobScheduler supaya app dibangunkan
+ * kembali walau proses sudah dibunuh / dibekukan XOS.
+ *
+ * BUG YANG SUDAH DIPERBAIKI: versi sebelumnya专项资金 pekerjaan di dalam
+ * Thread terpisah lalu memanggil jobFinished() dari thread itu. Itu menghasilkan
+ * ANR "No response to onStartJob" (tercatat di log HP 29/09 12:40) karena:
+ *  - jobFinished() yang dipanggil manual setelah system menganggap job selesai
+ *    bisa menggantung, terutama kalau proses sedang dibekukan XOS
+ *    (mHiberReason='frozen' pada log).
+ *
+ * Sekarang: semua pekerjaan TAMBAT dan SINKRON langsung di onStartJob.
+ * Semuanya cuma startService() + schedule() yang tidak blocking, jadi selesai
+ * dalam hitungan milidetik dan tidak pernah menyentuh jaringan.
  */
 class KeepAliveJob : JobService() {
 
     override fun onStartJob(p: JobParameters?): Boolean {
-        // false = pekerjaan selesai sebelum selesai (tidak perlu pekerjaan lanjutan)
-        return try {
-            Thread {
-                KeepAlive.pulse(applicationContext)
-                try { jobFinished(p, false) } catch (_: Exception) {}
-            }.apply { isDaemon = true; start() }
-            false
+        // Kerjakan seketika & sinkron. Semua operasi di bawah non-blocking
+        // (hanya mengirim Intent / menjadwalkan job), tidak ada I/O atau sleep.
+        try {
+            KeepAlive.pulse(applicationContext)
         } catch (e: Exception) {
-            Log.w("KeepAliveJob", "gagal: ${e.message}")
-            false
+            Log.w("KeepAliveJob", "pulse gagal: ${e.message}")
         }
+        // false = job selesai di sini; sistem yang menutupnya.
+        // JANGAN panggil jobFinished() manual setelah mengembalikan false.
+        return false
     }
 
     override fun onStopJob(p: JobParameters?): Boolean {
-        // true = dijadwalkan ulang otomatis; kita juga jadwalkan manual di pulse()
+        // true = minta dijadwalkan ulang. pulse() juga menjadwalkan ulang
+        // sendiri sebagai jaring pengaman.
         return true
     }
 }
